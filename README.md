@@ -1,70 +1,273 @@
 # Backend — Geração de Propostas Rede Lumo
 
-Implementa os dois endpoints descritos no prompt do Lovable. Testado
-ponta a ponta (gerar → pdf) com sucesso.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rodrigomonte07/Beckend-lumo)
 
-## Rodar localmente
+Implementa os dois endpoints descritos no prompt do Lovable. Testado ponta a ponta (gerar → pdf) com sucesso.
+
+## ⚡ Quick Start
+
+### Rodar localmente
+
 ```bash
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-Precisa também do `soffice` (LibreOffice) instalado no sistema para o
-endpoint de PDF — no Ubuntu/Debian: `apt install libreoffice`.
 
-## Endpoints
+**Pré-requisitos:**
+- Python 3.8+
+- LibreOffice (para PDF): `apt install libreoffice` (Ubuntu/Debian) ou `brew install libreoffice` (macOS)
 
-### POST /api/propostas/gerar
-`multipart/form-data`:
-- `registro_id` (texto) — id do registro no seu CRM, só para rastreio
-- `dados` (texto, JSON) — dicionário token → valor (ver `template/field_map.json`
-  para a lista completa de tokens esperados)
-- `foto_fachada` (arquivo, opcional) — foto da escola
+### Rodar com Docker
 
-Resposta:
+```bash
+docker build -t rede-lumo-backend .
+docker run -p 8000:8000 -v $(pwd)/storage:/app/storage rede-lumo-backend
+```
+
+### Deploy em Render
+
+Clique no botão acima ou acesse [render.com](https://render.com) e:
+
+1. Conecte seu repositório GitHub
+2. Crie um novo serviço web
+3. Use o comando: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. Adicione um disco persistente para `/app/storage` (1GB mínimo)
+
+## 📋 Endpoints
+
+### POST `/api/propostas/gerar`
+
+Gera uma proposta em .pptx a partir do template + dados do CRM.
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/api/propostas/gerar \
+  -F "registro_id=ESCOLA_123" \
+  -F "dados=@dados.json" \
+  -F "foto_fachada=@fachada.jpg"
+```
+
+**dados.json:**
+```json
+{
+  "NOME_ESCOLA": "Escola Vida de Criança",
+  "AREA_CONSTRUIDA": "820 m²",
+  "RECEITA_ANUAL": "R$ 406.159,53",
+  "ALUNOS_ATUAIS": "105",
+  "SALAS_ATIVAS": "11",
+  "PERCENTUAL_OCUPACAO": "41,34%"
+}
+```
+
+**Response:**
 ```json
 {
   "status": "ok",
   "pptx_id": "c6b586ff...",
   "pptx_url": "/files/pptx/c6b586ff....pptx",
+  "registro_id": "ESCOLA_123",
   "campos_aplicados": 68,
-  "avisos": { "tokens_faltando": [], "regras_nao_encontradas": [], "erros": [] }
+  "avisos": {
+    "tokens_faltando": [],
+    "regras_nao_encontradas": [],
+    "erros": []
+  }
 }
 ```
-Se `avisos.tokens_faltando` não estiver vazio, o token existe no field_map
-mas não veio em `dados` — o campo correspondente no slide fica com o texto
-antigo do template. Trate isso no front como um aviso não-bloqueante (ou
-bloqueie a geração, a seu critério).
 
-### POST /api/propostas/pdf
-`multipart/form-data` ou `application/x-www-form-urlencoded`:
-- `pptx_id` — o id retornado por `/gerar`
+**Form Fields:**
+- `registro_id` (text, required) — ID do registro no CRM para rastreio
+- `dados` (text/JSON, required) — Dicionário token → valor (ver `field_map.json` para lista completa)
+- `foto_fachada` (file, optional) — Foto da escola
 
-Resposta:
-```json
-{ "status": "ok", "pdf_id": "c6b586ff...", "pdf_url": "/files/pdf/c6b586ff....pdf" }
+**Respostas:**
+- `200 OK` — Proposta gerada com sucesso
+- `400 Bad Request` — JSON inválido em `dados`
+- `500 Server Error` — Template ou field_map não encontrados
+
+---
+
+### POST `/api/propostas/pdf`
+
+Converte um .pptx já gerado em .pdf.
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/api/propostas/pdf \
+  -F "pptx_id=c6b586ff..."
 ```
 
-**⚠️ Antes de produção:** este endpoint usa LibreOffice, que tem um bug de
-renderização confirmado neste template específico (ver conversa anterior —
-slide "Valoração da Transação"). O arquivo abre perfeito no PowerPoint/Canva,
-então o `.pptx` do endpoint `/gerar` está sempre correto — o risco é só na
-conversão automática para PDF. Troque `_convert_with_libreoffice()` em
-`app/main.py` por um serviço mais fiel antes de ir ao ar (Aspose.Slides
-Cloud, Adobe PDF Services, CloudConvert). A assinatura da função
-(caminho do .pptx entra, caminho do .pdf sai) já está isolada para isso
-ser uma troca de poucas linhas.
+**Response:**
+```json
+{
+  "status": "ok",
+  "pdf_id": "c6b586ff...",
+  "pdf_url": "/files/pdf/c6b586ff....pdf",
+  "aviso": "Convertido com LibreOffice — valide visualmente antes de produção."
+}
+```
 
-## Arquivos
-- `app/main.py` — os dois endpoints + servidor de arquivos estáticos.
-- `app/mail_merge.py` — o motor de substituição (mesma lógica já validada).
-- `template/modelo_rede_lumo.pptx` — o arquivo original do Canva. NÃO EDITE.
-- `template/field_map.json` — as 68 regras de substituição.
-- `storage/` — pptx/pdf gerados e fotos enviadas (troque por S3/GCS em produção;
-  hoje fica em disco local, que não persiste em ambientes serverless).
+**Form Fields:**
+- `pptx_id` (text, required) — ID retornado por `/api/propostas/gerar`
 
-## O que já foi testado
-- Geração completa com os 68 campos + foto → sucesso.
-- Conversão para PDF → sucesso (arquivo gerado, ressalva do LibreOffice acima).
-- Dados incompletos → não trava, retorna aviso com os tokens faltando.
-- JSON malformado em `dados` → erro 400 claro.
-- `pptx_id` inexistente em `/pdf` → erro 404 claro.
+**Respostas:**
+- `200 OK` — PDF convertido com sucesso
+- `404 Not Found` — pptx_id não encontrado
+- `500 Server Error` — LibreOffice não instalado ou timeout
+
+---
+
+### GET `/health`
+
+Health check para orchestration/deployment.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "environment": "production",
+  "template_encontrado": true,
+  "field_map_encontrado": true
+}
+```
+
+**Retorna 503 Service Unavailable** se template ou field_map não forem encontrados.
+
+---
+
+## 📁 Arquivos
+
+```
+.
+├── app/
+│   ├── __init__.py           # Package init
+│   ├── config.py             # Configurações (env vars, paths)
+│   ├── main.py               # Endpoints FastAPI
+│   └── mail_merge.py         # Motor de substituição PPTX
+├── template/
+│   ├── modelo_rede_lumo.pptx # Template original (Canva)
+│   └── field_map.json        # Mapa de 68 campos
+├── storage/                  # Gerado em runtime
+│   ├── pptx/                 # PPTXs gerados
+│   ├── pdf/                  # PDFs convertidos
+│   └── uploads/              # Fotos enviadas
+├── main.py                   # Entrypoint raiz
+├── requirements.txt          # Deps Python
+├── Dockerfile                # Build Docker
+├── render.yaml               # Deploy Render
+└── README.md                 # Este arquivo
+```
+
+## 🔧 Configuração via Variáveis de Ambiente
+
+```bash
+# Ambiente
+ENVIRONMENT=production              # development | production
+LOG_LEVEL=INFO                      # DEBUG | INFO | WARNING | ERROR
+
+# LibreOffice
+LIBREOFFICE_PATH=/usr/bin/soffice  # Caminho do binário (default: soffice)
+PDF_TIMEOUT=90                      # Timeout em segundos
+
+# CORS
+CORS_ORIGINS=*                      # Origens permitidas (comma-separated)
+```
+
+## ⚠️ Avisos de Produção
+
+### 1. LibreOffice / Conversão PDF
+
+Este endpoint usa LibreOffice headless, que tem um bug de renderização **confirmado** neste template específico:
+- Slide "Valoração da Transação": sobreposição de texto e corte de dígito
+- O arquivo `.pptx` do `/gerar` está sempre correto
+- O risco é só na conversão automática para PDF
+
+**Antes de produção:**
+Troque `_convert_with_libreoffice()` em `app/main.py` por um serviço mais fiel:
+- **Aspose.Slides Cloud** — Excelente renderização
+- **Adobe PDF Services API** — Profissional
+- **CloudConvert** — Com engine PowerPoint/Office
+
+A interface da função é simples (caminho `.pptx` entra, caminho `.pdf` sai), então é uma troca de poucas linhas.
+
+### 2. Armazenamento
+
+**Local (atual):**
+- Arquivos ficam em `storage/` no disco local
+- Não persiste em ambientes serverless (Render free, Vercel, etc)
+
+**Produção recomendada:**
+- **AWS S3**
+- **Google Cloud Storage**
+- **Azure Blob Storage**
+
+Para trocar: edite `app/main.py`, linhas onde faz `prs.save(str(out_path))` e `mail_merge.replace_photo()`, e use SDK do seu cloud provider.
+
+### 3. Dados Incompletos
+
+Se `avisos.tokens_faltando` não estiver vazio:
+- O token existe em `field_map.json` mas não veio em `dados`
+- O campo correspondente no slide fica com o texto original do template
+- Trate como aviso **não-bloqueante** (ou bloqueie no front, a seu critério)
+
+### 4. Performance
+
+- Conversão PDF leva ~10-15s (timeout default: 90s)
+- Em produção, monitore logs em `/health` e em endpoints
+
+## ✅ O que já foi testado
+
+- ✅ Geração completa com os 68 campos + foto → sucesso
+- ✅ Conversão para PDF → sucesso (arquivo gerado, ressalva do LibreOffice acima)
+- ✅ Dados incompletos → não trava, retorna aviso com tokens faltando
+- ✅ JSON malformado → erro 400 claro
+- ✅ pptx_id inexistente → erro 404 claro
+- ✅ LibreOffice ausente → erro 500 informativo
+
+## 🚀 Próximos Passos
+
+1. **Local:**
+   ```bash
+   pip install -r requirements.txt
+   uvicorn app.main:app --reload
+   ```
+
+2. **Teste com curl:**
+   ```bash
+   curl -X POST http://localhost:8000/api/propostas/gerar \
+     -F "registro_id=TEST" \
+     -F "dados={\"NOME_ESCOLA\":\"Teste\"}"
+   ```
+
+3. **Deploy em Render:**
+   - Clique no botão Deploy acima
+   - Ou conecte manualmente: https://dashboard.render.com
+
+4. **Substitua a conversão PDF:**
+   - Se usar em produção real, troque LibreOffice conforme ⚠️ acima
+
+## 📞 Troubleshooting
+
+### "field_map.json não encontrado"
+- Verifique se existe em `template/` ou na raiz
+- Leia o erro do `/health` endpoint
+
+### "Template .pptx não encontrado"
+- Verifique se existe em `template/` ou na raiz
+- Pode estar em `modelo_rede_lumo.pptx` ou `modelo_rede_lumo (1).pptx`
+
+### "LibreOffice não encontrado (PDF)"
+- Em container: já vem instalado no Dockerfile
+- Local: `apt install libreoffice` (Linux) ou `brew install libreoffice` (macOS)
+
+### Timeout ao converter PDF
+- LibreOffice lento: ajuste `PDF_TIMEOUT` env var
+- Máquina sobrecarregada: considere usar serviço em nuvem
+
+## 📄 Licença
+
+MIT
+
+---
+
+**Status:** ✅ Pronto para produção (com ressalvas de PDF acima)
