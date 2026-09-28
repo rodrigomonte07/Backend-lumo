@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pptx import Presentation
 
-from . import mail_merge
+from import mail_merge
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = BASE_DIR / "template" / "modelo_rede_lumo.pptx"
