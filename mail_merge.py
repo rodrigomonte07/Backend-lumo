@@ -24,11 +24,106 @@ import zipfile
 from pathlib import Path
 
 from pptx import Presentation
+from pptx.util import Emu, Pt
+
+EMU_PER_PT = 12700
+
+# Fração do tamanho da fonte (em pt) usada como largura média de caractere.
+# É uma aproximação (não medimos glifo por glifo) calibrada para as fontes
+# bold/condensadas deste template — suficiente para decidir COM MARGEM DE
+# SOBRA se um texto cabe, sem precisar renderizar a fonte de verdade.
+AVG_CHAR_WIDTH_FACTOR = 0.56
+SAFETY_MARGIN = 0.94          # deixa ~6% de folga na largura utilizável
+MIN_SHRINK_RATIO = 0.70       # nunca encolhe a fonte abaixo de 70% do original
+LINE_HEIGHT_FACTOR = 1.22     # aproximação de entrelinha quando não há lnSpc
 
 
 def load_json(path):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _line_capacity_chars(box_width_emu, font_size_pt):
+    """Quantos caracteres cabem em uma linha, dada a largura da caixa e o tamanho da fonte."""
+    usable_width_pt = (box_width_emu / EMU_PER_PT) * SAFETY_MARGIN
+    char_width_pt = max(font_size_pt * AVG_CHAR_WIDTH_FACTOR, 0.1)
+    return max(1, int(usable_width_pt / char_width_pt))
+
+
+def _wrapped_line_count(text, capacity_chars):
+    """Simula quebra de linha por palavra (como o PowerPoint faz) e conta quantas linhas resultam."""
+    words = text.split(" ")
+    lines, cur = 1, 0
+    for w in words:
+        add = len(w) + (1 if cur > 0 else 0)
+        if cur + add > capacity_chars and cur > 0:
+            lines += 1
+            cur = len(w)
+        else:
+            cur += add
+    return max(1, lines)
+
+
+def fit_run_to_shape(shape, run, report=None):
+    """
+    Garante que o texto final do `run` caiba na caixa sem estourar o espaço
+    que o desenho original reservava para ele.
+
+    Por quê: toda caixa deste template usa `spAutoFit` (a altura deveria se
+    ajustar ao texto). O PowerPoint e o Canva recalculam isso ao vivo, mas
+    nem todo renderizador faz isso (o LibreOffice, por exemplo, usa a altura
+    congelada no arquivo) — então um valor mais longo que o texto de exemplo
+    original pode quebrar linha e invadir o elemento vizinho, ou ser cortado.
+
+    Estratégia: 1) tenta encolher a fonte (até um piso) para manter o texto
+    dentro da altura ORIGINAL da caixa — isso não desloca nada na página.
+    2) Se mesmo no piso de encolhimento não couber, cresce a altura da caixa
+    (mesmo comportamento que o spAutoFit já promete) como último recurso.
+    """
+    if run.font.size is None:
+        return  # sem tamanho explícito no run — não há uma base segura de cálculo
+    original_sz_pt = run.font.size.pt
+    box_width_emu = shape.width
+    box_height_emu = shape.height
+    if not box_width_emu or not box_height_emu:
+        return
+
+    text = run.text
+    line_height_pt = original_sz_pt * LINE_HEIGHT_FACTOR
+    original_capacity_lines = max(1, int((box_height_emu / EMU_PER_PT) / line_height_pt))
+
+    sz = original_sz_pt
+    for _ in range(14):
+        capacity_chars = _line_capacity_chars(box_width_emu, sz)
+        if _wrapped_line_count(text, capacity_chars) <= original_capacity_lines:
+            break
+        sz *= 0.96
+        if sz <= original_sz_pt * MIN_SHRINK_RATIO:
+            sz = original_sz_pt * MIN_SHRINK_RATIO
+            break
+
+    if sz < original_sz_pt - 0.05:
+        run.font.size = Pt(round(sz, 1))
+        if report is not None:
+            report.setdefault("ajustes_de_fonte", []).append(
+                f"shape_id {shape.shape_id}: fonte reduzida de {original_sz_pt:.1f}pt "
+                f"para {sz:.1f}pt para caber '{text[:40]}{'…' if len(text) > 40 else ''}'"
+            )
+
+    # Último recurso: se mesmo no piso de fonte ainda precisar de mais linhas
+    # do que a caixa original comporta, deixa a caixa crescer para baixo —
+    # é exatamente o que o spAutoFit promete fazer, só que garantido no arquivo.
+    capacity_chars = _line_capacity_chars(box_width_emu, sz)
+    lines_needed = _wrapped_line_count(text, capacity_chars)
+    if lines_needed > original_capacity_lines:
+        extra_lines = lines_needed - original_capacity_lines
+        new_height = int(box_height_emu + extra_lines * line_height_pt * EMU_PER_PT)
+        shape.height = Emu(new_height)
+        if report is not None:
+            report.setdefault("ajustes_de_altura", []).append(
+                f"shape_id {shape.shape_id}: caixa aumentada em {extra_lines} linha(s) "
+                f"para não cortar '{text[:40]}{'…' if len(text) > 40 else ''}'"
+            )
 
 
 def apply_field_map(prs, field_map, data, report):
@@ -68,12 +163,16 @@ def apply_field_map(prs, field_map, data, report):
         applied = False
         for para in shape.text_frame.paragraphs:
             for run in para.runs:
+                changed = False
                 if mode == "exact" and run.text == find:
                     run.text = value
-                    applied = True
+                    changed = True
                 elif mode == "contains" and find in run.text:
                     run.text = run.text.replace(find, value)
+                    changed = True
+                if changed:
                     applied = True
+                    fit_run_to_shape(shape, run, report)
 
         if applied:
             report["applied"] += 1
@@ -187,6 +286,14 @@ def main():
             print(f"   - {msg}")
     if report["photo"]:
         print(f"\n📷 {report['photo']}")
+    if report.get("ajustes_de_fonte"):
+        print(f"\n🔧 Fonte ajustada automaticamente para caber ({len(report['ajustes_de_fonte'])}):")
+        for msg in report["ajustes_de_fonte"]:
+            print(f"   - {msg}")
+    if report.get("ajustes_de_altura"):
+        print(f"\n🔧 Caixa ajustada automaticamente para caber ({len(report['ajustes_de_altura'])}):")
+        for msg in report["ajustes_de_altura"]:
+            print(f"   - {msg}")
 
     if report["missing_tokens"] or report["errors"]:
         sys.exit(1)
