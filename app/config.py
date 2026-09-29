@@ -27,7 +27,6 @@ FIELD_MAP_CANDIDATES = (
     BASE_DIR / "field_map.json",
 )
 
-# Garantir que a pasta storage exista
 STORAGE_DIR = BASE_DIR / "storage"
 PPTX_DIR = STORAGE_DIR / "pptx"
 PDF_DIR = STORAGE_DIR / "pdf"
@@ -47,3 +46,16 @@ CORS_ORIGINS = [
     for origin in os.getenv("CORS_ORIGINS", "*").split(",")
     if origin.strip()
 ]
+
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
+AWS_REGION = os.getenv("AWS_REGION", os.getenv("AWS_S3_REGION", "us-east-1")).strip()
+AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "").strip()
+AWS_S3_PUBLIC_URL = os.getenv("AWS_S3_PUBLIC_URL", "").strip()
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
+
+if STORAGE_BACKEND == "s3" and not AWS_S3_BUCKET:
+    STORAGE_BACKEND = "local"
+
+if STORAGE_BACKEND not in {"local", "s3"}:
+    STORAGE_BACKEND = "local"
