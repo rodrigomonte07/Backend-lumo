@@ -3,7 +3,10 @@ services:
     name: rede-lumo-backend
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: >-
+      apt-get update &&
+      apt-get install -y --no-install-recommends libreoffice fonts-liberation &&
+      pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
@@ -12,6 +15,10 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
+      - key: LIBREOFFICE_PATH
+        value: /usr/bin/soffice
+      - key: PDF_TIMEOUT
+        value: "90"
     disk:
       name: storage
       mountPath: /app/storage
