@@ -1,6 +1,6 @@
 # Backend — Geração de Propostas Rede Lumo
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rodrigomonte07/Beckend-lumo)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rodrigomonte07/Backend-lumo)
 
 Implementa os dois endpoints descritos no prompt do Lovable. Testado ponta a ponta (gerar → pdf) com sucesso.
 
@@ -32,6 +32,7 @@ Clique no botão acima ou acesse [render.com](https://render.com) e:
 2. Crie um novo serviço web
 3. Use o comando: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 4. Adicione um disco persistente para `/app/storage` (1GB mínimo)
+5. Garanta que a variável `LIBREOFFICE_PATH` esteja definida como `/usr/bin/soffice`
 
 ## 📋 Endpoints
 
@@ -144,9 +145,8 @@ Health check para orchestration/deployment.
 │   ├── config.py             # Configurações (env vars, paths)
 │   ├── main.py               # Endpoints FastAPI
 │   └── mail_merge.py         # Motor de substituição PPTX
-├── template/
-│   ├── modelo_rede_lumo.pptx # Template original (Canva)
-│   └── field_map.json        # Mapa de 68 campos
+├── field_map.json            # Mapa de 68 campos
+├── modelo_rede_lumo (1).pptx # Template original (Canva)
 ├── storage/                  # Gerado em runtime
 │   ├── pptx/                 # PPTXs gerados
 │   ├── pdf/                  # PDFs convertidos
@@ -155,8 +155,11 @@ Health check para orchestration/deployment.
 ├── requirements.txt          # Deps Python
 ├── Dockerfile                # Build Docker
 ├── render.yaml               # Deploy Render
-└── README.md                 # Este arquivo
+├── README.md                 # Este arquivo
+└── .gitignore                # Arquivos locais ignorados
 ```
+
+> Importante: no ambiente atual, o template e o `field_map.json` ficam na raiz do projeto, e a aplicação já resolve esses caminhos automaticamente.
 
 ## 🔧 Configuração via Variáveis de Ambiente
 
@@ -249,11 +252,11 @@ Se `avisos.tokens_faltando` não estiver vazio:
 ## 📞 Troubleshooting
 
 ### "field_map.json não encontrado"
-- Verifique se existe em `template/` ou na raiz
+- Verifique se existe na raiz do projeto ou em `template/`
 - Leia o erro do `/health` endpoint
 
 ### "Template .pptx não encontrado"
-- Verifique se existe em `template/` ou na raiz
+- Verifique se existe na raiz do projeto ou em `template/`
 - Pode estar em `modelo_rede_lumo.pptx` ou `modelo_rede_lumo (1).pptx`
 
 ### "LibreOffice não encontrado (PDF)"
