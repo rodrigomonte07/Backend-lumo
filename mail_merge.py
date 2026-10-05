@@ -135,7 +135,7 @@ def fit_run_to_shape(shape, run, original_text, slide=None, report=None):
     longest_original_token = max((len(w) for w in original_text.split(" ")), default=1)
     longest_new_token = max((len(w) for w in text.split(" ")), default=1)
     if longest_new_token > longest_original_token > 0:
-        ratio_sz = original_sz_pt * (longest_original_token / longest_new_token)
+        ratio_sz = original_sz_pt * (longest_original_token / longest_new_token) * SAFETY_MARGIN
         sz = min(sz, max(ratio_sz, original_sz_pt * MIN_SHRINK_RATIO))
 
     if sz < original_sz_pt - 0.05:
