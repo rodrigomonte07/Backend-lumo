@@ -31,8 +31,41 @@ from pptx import Presentation
 from . import mail_merge
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-TEMPLATE_PATH = BASE_DIR / "template" / "modelo_rede_lumo.pptx"
-FIELD_MAP_PATH = BASE_DIR / "template" / "field_map.json"
+
+# Resolve template path with fallback: try template/ first, then root
+def _find_first_existing(*paths):
+    """Return the first existing path, or raise an error if none exist."""
+    for p in paths:
+        if p.exists():
+            return p
+    raise FileNotFoundError(
+        f"None of the candidate paths exist:\n" + "\n".join(str(p) for p in paths)
+    )
+
+TEMPLATE_CANDIDATES = (
+    BASE_DIR / "template" / "modelo_rede_lumo.pptx",
+    BASE_DIR / "template" / "modelo_rede_lumo (1).pptx",
+    BASE_DIR / "modelo_rede_lumo.pptx",
+    BASE_DIR / "modelo_rede_lumo (1).pptx",
+)
+
+FIELD_MAP_CANDIDATES = (
+    BASE_DIR / "template" / "field_map.json",
+    BASE_DIR / "field_map.json",
+)
+
+try:
+    TEMPLATE_PATH = _find_first_existing(*TEMPLATE_CANDIDATES)
+except FileNotFoundError as e:
+    TEMPLATE_PATH = None
+    TEMPLATE_ERROR = str(e)
+
+try:
+    FIELD_MAP_PATH = _find_first_existing(*FIELD_MAP_CANDIDATES)
+except FileNotFoundError as e:
+    FIELD_MAP_PATH = None
+    FIELD_MAP_ERROR = str(e)
+
 STORAGE_DIR = BASE_DIR / "storage"
 PPTX_DIR = STORAGE_DIR / "pptx"
 PDF_DIR = STORAGE_DIR / "pdf"
@@ -68,15 +101,17 @@ async def gerar_proposta(
     dados: str = Form(...),  # JSON string com os tokens (ver field_map.json)
     foto_fachada: UploadFile | None = None,
 ):
+    if TEMPLATE_PATH is None:
+        raise HTTPException(500, f"Template .pptx não encontrado no servidor. {TEMPLATE_ERROR}")
+    if FIELD_MAP_PATH is None:
+        raise HTTPException(500, f"field_map.json não encontrado no servidor. {FIELD_MAP_ERROR}")
+
     try:
         data = json.loads(dados)
     except json.JSONDecodeError as e:
         raise HTTPException(400, f"'dados' não é um JSON válido: {e}")
 
     field_map = json.loads(FIELD_MAP_PATH.read_text(encoding="utf-8"))
-
-    if not TEMPLATE_PATH.exists():
-        raise HTTPException(500, "Template .pptx não encontrado no servidor.")
 
     prs = Presentation(str(TEMPLATE_PATH))
     report = {"applied": 0, "not_found": [], "missing_tokens": set(), "errors": [], "photo": None}
@@ -213,4 +248,29 @@ def _convert_with_libreoffice(src_path: Path) -> Path:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "template_encontrado": TEMPLATE_PATH.exists()}
+    template_found = TEMPLATE_PATH is not None and TEMPLATE_PATH.exists()
+    field_map_found = FIELD_MAP_PATH is not None and FIELD_MAP_PATH.exists()
+    
+    if not template_found or not field_map_found:
+        return JSONResponse(
+            {
+                "status": "error",
+                "template_encontrado": template_found,
+                "field_map_encontrado": field_map_found,
+                "template_path_procurado": [str(p) for p in TEMPLATE_CANDIDATES],
+                "field_map_path_procurado": [str(p) for p in FIELD_MAP_CANDIDATES],
+                **({"template_error": TEMPLATE_ERROR} if TEMPLATE_PATH is None else {}),
+                **({"field_map_error": FIELD_MAP_ERROR} if FIELD_MAP_PATH is None else {}),
+            },
+            status_code=503,
+        )
+    
+    return JSONResponse(
+        {
+            "status": "ok",
+            "template_encontrado": template_found,
+            "field_map_encontrado": field_map_found,
+            "template_path": str(TEMPLATE_PATH),
+            "field_map_path": str(FIELD_MAP_PATH),
+        }
+    )
