@@ -13,10 +13,7 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
-    disk:
-      name: storage
-      mountPath: /app/storage
-      sizeGB: 1
+      - key: LIBREOFFICE_PATH
         value: /usr/bin/soffice
       - key: PDF_TIMEOUT
         value: "90"
