@@ -293,3 +293,13 @@ O gerador parte do .pptx original e usa o PDF exportado do Canva (`assets/modelo
 
 Slide 2: a grade de 87 bonequinhos e os colchetes seguem a % de ocupação (`PERCENTUAL_OCUPACAO`).
 As duas "pizzas" são ilustrações fixas do modelo (um quarto destacado), não gráficos de dados.
+
+## Slides 6 e 7: parcelas e valores (nada fixo)
+
+Quantidades e valores vêm de `dados`; singular/plural pela quantidade ("1 parcela" / "N parcelas").
+- Quantidades: `ESCOLA_QTD_PARCELAS_ENTRADA`, `ESCOLA_QTD_PARCELAS_SALDO`, `IMOVEL_QTD_PARCELAS_ENTRADA`, `IMOVEL_QTD_PARCELAS_SALDO`
+- Valores: `MEDIO_PARCELA_ENTRADA_NEGOCIO`, `LONGO_PARCELA_SALDO_NEGOCIO`, `LONGO_PARCELA_ENTRADA_IMOVEL`, `IMOVEL_VALOR_PARCELA_SALDO`
+- Totais (usados como vêm, sem recálculo): `CURTO_TOTAL_MENSAL`, `MEDIO_TOTAL_MENSAL`, `LONGO_TOTAL_MENSAL`
+- Participação: `PCT_PARTICIPACAO_MANTENEDOR`, `PCT_PARTICIPACAO_ADQUIRIDA`
+- Título do total: "Total mensal na parcela inicial" (1) ou "Total mensal nas N parcelas iniciais" (N>1): médio usa a entrada da escola, longo a entrada do imóvel.
+- Se faltar algum campo, o texto correspondente não é gerado e aparece em `inconsistencias` no retorno (o texto do modelo não deve ser usado nesse caso).

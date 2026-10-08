@@ -402,7 +402,115 @@ def derive_fields(data, report):
             else:
                 report.setdefault("inconsistencias", []).append(
                     f"{tot_key} / {par_key} = {n:.2f} (não é número inteiro de parcelas) — confira os dados do CRM")
+    _derive_installment_texts(d, report)
     return d
+
+
+def _qtd(v):
+    m = re.search(r"\d+", str(v)) if v is not None else None
+    return int(m.group(0)) if m else None
+
+
+def _parc(n, valor):
+    """'1 parcela de R$ x' / '48 parcelas de R$ x' (singular/plural pela quantidade)."""
+    return f"{n} {'parcela' if n == 1 else 'parcelas'} de {valor}"
+
+
+def _com_pct(v):
+    v = str(v).strip()
+    return v if v.endswith("%") else v + "%"
+
+
+def _derive_installment_texts(d, report):
+    """
+    Quantidades e valores de parcelas dos slides 6 ("Como você recebe") e 7 ("Perspectiva financeira por etapa").
+    Nada de número fixo do template: tudo sai dos campos do CRM; singular/plural pela quantidade.
+    Nomes antigos do CRM continuam valendo como alternativa (alias).
+    """
+    alias = {
+        "ESCOLA_QTD_PARCELAS_ENTRADA": "ESCOLA_N_PARCELAS_ENTRADA",
+        "ESCOLA_QTD_PARCELAS_SALDO": "ESCOLA_N_PARCELAS_SALDO",
+        "IMOVEL_QTD_PARCELAS_ENTRADA": "IMOVEL_N_PARCELAS_ENTRADA",
+        "IMOVEL_QTD_PARCELAS_SALDO": "IMOVEL_N_PARCELAS_SALDO",
+        "MEDIO_PARCELA_ENTRADA_NEGOCIO": "ESCOLA_VALOR_PARCELA_ENTRADA",
+        "LONGO_PARCELA_SALDO_NEGOCIO": "ESCOLA_VALOR_PARCELA_SALDO",
+        "LONGO_PARCELA_ENTRADA_IMOVEL": "IMOVEL_VALOR_PARCELA_ENTRADA",
+        "IMOVEL_VALOR_PARCELA_SALDO": "LONGO_PARCELA_SALDO_IMOVEL",
+        "PCT_PARTICIPACAO_MANTENEDOR": "PROLABORE_PARTICIPACAO_PCT",
+        "PCT_PARTICIPACAO_ADQUIRIDA": "PROLABORE_LUCRO_PCT",
+    }
+    for tok, alt in alias.items():
+        if not str(d.get(tok, "")).strip() and str(d.get(alt, "")).strip():
+            d[tok] = d[alt]
+    if not str(d.get("PCT_PARTICIPACAO_ADQUIRIDA", "")).strip() and str(d.get("PERCENTUAL_PARTICIPACAO_SOCIETARIA", "")).strip():
+        d["PCT_PARTICIPACAO_ADQUIRIDA"] = d["PERCENTUAL_PARTICIPACAO_SOCIETARIA"]
+    for tok in ("PCT_PARTICIPACAO_MANTENEDOR", "PCT_PARTICIPACAO_ADQUIRIDA"):
+        if str(d.get(tok, "")).strip():
+            d[tok] = _com_pct(d[tok])
+    # o slide 6 usa os mesmos números (nome antigo)
+    for pre in ("ESCOLA", "IMOVEL"):
+        for kind in ("ENTRADA", "SALDO"):
+            q = _qtd(d.get(f"{pre}_QTD_PARCELAS_{kind}"))
+            if q:
+                d[f"{pre}_QTD_PARCELAS_{kind}"] = str(q)
+                d[f"{pre}_N_PARCELAS_{kind}"] = str(q)
+
+    def n(k):
+        return _qtd(d.get(k))
+
+    def v(k):
+        x = str(d.get(k, "")).strip()
+        return x or None
+
+    miss = report.setdefault("inconsistencias", [])
+
+    def put(tok, text, needs):
+        if text is None:
+            miss.append(f"{tok} não gerado: faltam {', '.join(needs)} nos dados")
+        else:
+            d[tok] = text
+
+    # ---- slide 6: "Como você recebe"
+    for pre in ("IMOVEL", "ESCOLA"):
+        qe, qs = n(f"{pre}_QTD_PARCELAS_ENTRADA"), n(f"{pre}_QTD_PARCELAS_SALDO")
+        if qe:
+            d[f"{pre}_TXT_EM_ENTRADA"] = f"em {qe} {'parcela' if qe == 1 else 'parcelas'} de"
+            d[f"{pre}_TXT_PRIMEIROS"] = "1 primeiro pagamento" if qe == 1 else f"{qe} primeiros pagamentos"
+            d[f"{pre}_TXT_PAGOS_EM"] = "Pago em 1 parcela" if qe == 1 else f"Pagos em {qe} parcelas consecutivas"
+        if qs:
+            d[f"{pre}_TXT_EM_SALDO"] = f"em {qs} {'parcela' if qs == 1 else 'parcelas'} de"
+            d[f"{pre}_TXT_SALDO_MESES"] = f"Saldo em {qs} {'mês' if qs == 1 else 'meses'}"
+
+    # ---- slide 7: perspectiva financeira por etapa
+    qe_esc, qs_esc = n("ESCOLA_QTD_PARCELAS_ENTRADA"), n("ESCOLA_QTD_PARCELAS_SALDO")
+    qe_imo, qs_imo = n("IMOVEL_QTD_PARCELAS_ENTRADA"), n("IMOVEL_QTD_PARCELAS_SALDO")
+    v_ent_esc, v_sal_esc = v("MEDIO_PARCELA_ENTRADA_NEGOCIO"), v("LONGO_PARCELA_SALDO_NEGOCIO")
+    v_ent_imo, v_sal_imo = v("LONGO_PARCELA_ENTRADA_IMOVEL"), v("IMOVEL_VALOR_PARCELA_SALDO")
+
+    def ini(q):
+        return "a parcela inicial" if q == 1 else f"as {q} parcelas iniciais"
+
+    def titulo(q):
+        return "Total mensal na parcela inicial" if q == 1 else f"Total mensal nas {q} parcelas iniciais"
+
+    put("S7_MEDIO_ENTRADA_NEGOCIO", _parc(qe_esc, v_ent_esc) if qe_esc and v_ent_esc else None,
+        ["ESCOLA_QTD_PARCELAS_ENTRADA", "MEDIO_PARCELA_ENTRADA_NEGOCIO"])
+    put("S7_LONGO_PARCELAS_NEGOCIO", _parc(qs_esc, v_sal_esc) if qs_esc and v_sal_esc else None,
+        ["ESCOLA_QTD_PARCELAS_SALDO", "LONGO_PARCELA_SALDO_NEGOCIO"])
+    put("S7_LONGO_ENTRADA_IMOVEL", _parc(qe_imo, v_ent_imo) if qe_imo and v_ent_imo else None,
+        ["IMOVEL_QTD_PARCELAS_ENTRADA", "LONGO_PARCELA_ENTRADA_IMOVEL"])
+    put("S7_NOTA_MEDIO",
+        f"Após {ini(qe_esc)}, o saldo do negócio passa para {_parc(qs_esc, v_sal_esc)}."
+        if qe_esc and qs_esc and v_sal_esc else None,
+        ["ESCOLA_QTD_PARCELAS_ENTRADA", "ESCOLA_QTD_PARCELAS_SALDO", "LONGO_PARCELA_SALDO_NEGOCIO"])
+    put("S7_NOTA_LONGO",
+        f"Após {ini(qe_imo)}, os saldos passam para {_parc(qs_esc, v_sal_esc)} no negócio e "
+        f"{_parc(qs_imo, v_sal_imo)} no imóvel."
+        if qe_imo and qs_esc and v_sal_esc and qs_imo and v_sal_imo else None,
+        ["IMOVEL_QTD_PARCELAS_ENTRADA", "ESCOLA_QTD_PARCELAS_SALDO", "LONGO_PARCELA_SALDO_NEGOCIO",
+         "IMOVEL_QTD_PARCELAS_SALDO", "IMOVEL_VALOR_PARCELA_SALDO"])
+    put("S7_TITULO_TOTAL_MEDIO", titulo(qe_esc) if qe_esc else None, ["ESCOLA_QTD_PARCELAS_ENTRADA"])
+    put("S7_TITULO_TOTAL_LONGO", titulo(qe_imo) if qe_imo else None, ["IMOVEL_QTD_PARCELAS_ENTRADA"])
 
 
 # ----------------------------------------------------------------------------
@@ -691,6 +799,9 @@ def normalize_line_breaks(prs, field_map=None, pills_path=PILLS_JSON, breaks_pat
     """
     slides = list(prs.slides)
     dynamic = {(r["slide"], r["shape_id"]) for r in (field_map or [])}
+    # caixas cujo texto muda de ESTRUTURA (ex.: 'Pagos em 3 parcelas consecutivas' -> 'Pago em 1 parcela'):
+    # as quebras do Canva não valem; o texto quebra natural e o fundo é recalculado pela medição real
+    free = {(r["slide"], r["shape_id"]) for r in (field_map or []) if r.get("free_wrap")}
     work = {}
     if Path(breaks_path).exists():
         for sno, shapes in json.load(open(breaks_path, encoding="utf-8")).items():
@@ -699,7 +810,7 @@ def normalize_line_breaks(prs, field_map=None, pills_path=PILLS_JSON, breaks_pat
                     work[(int(sno), int(sid))] = lines
     if Path(pills_path).exists():
         for pill in json.load(open(pills_path, encoding="utf-8")):
-            if len(pill["lines"]) >= 2:
+            if len(pill["lines"]) >= 2 and (pill["slide"], pill["shape_id"]) not in free:
                 work[(pill["slide"], pill["shape_id"])] = [ln["text"] for ln in pill["lines"]]
     done = 0
     for (sno, sid), line_texts in work.items():
@@ -1086,6 +1197,40 @@ def apply_line_pitch(prs, pitch_path=PITCH_JSON):
     return n
 
 
+def _flip_rotated_pictures(prs):
+    import io
+    from PIL import Image
+    A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+    done = set()
+    for slide in prs.slides:
+        for xfrm in slide._element.iter(A + "xfrm"):
+            rot = xfrm.get("rot")
+            if not (rot and rot.lstrip("-").isdigit() and int(rot) % 21600000 == 10800000):
+                continue
+            geom = xfrm.getnext()
+            blip = None
+            if geom is not None:
+                blip = geom.getnext().find(A + "blip") if geom.getnext() is not None and geom.getnext().tag == A + "blipFill" else None
+            if blip is None:
+                continue
+            rid = blip.get(R + "embed")
+            part = slide.part.related_part(rid)
+            key = id(part)
+            if key not in done:
+                try:
+                    img = Image.open(io.BytesIO(part.blob)).convert("RGBA").rotate(180)
+                    buf = io.BytesIO()
+                    img.save(buf, "PNG")
+                    part._blob = buf.getvalue()
+                except Exception:
+                    continue
+                done.add(key)
+            for ext in blip.findall(A + "extLst"):
+                blip.remove(ext)
+            xfrm.set("rot", "0")
+
+
 def tune_for_libreoffice(src_pptx, dst_pptx, offsets_path=LO_OFFSETS_JSON):
     """
     Cria uma cópia do .pptx pronta para o LibreOffice gerar o PDF: sobe/desce cada caixa de texto pelo
@@ -1108,6 +1253,10 @@ def tune_for_libreoffice(src_pptx, dst_pptx, offsets_path=LO_OFFSETS_JSON):
                 if sh.top is None:
                     continue
                 sh.top = Emu(int(sh.top - dy * EMU_PER_PT / (scale or 1.0)))
+    # o LibreOffice desenha o preenchimento por imagem sem a rotação de 180° (rot="-10800000"): as setas
+    # tracejadas "Curto → Médio → Longo" saíam viradas para trás no PDF. Na cópia do PDF a imagem é girada de
+    # verdade (e o SVG, que o LibreOffice preferiria, é descartado) e a rotação da forma vira 0.
+    _flip_rotated_pictures(prs)
     prs.save(str(dst_pptx))
 
 
