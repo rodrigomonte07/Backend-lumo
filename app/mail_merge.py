@@ -555,12 +555,7 @@ def apply_field_map(prs, field_map, data, report):
             if key not in originals:
                 originals[key] = (shape, para, slide, [r.text for r in para.runs])
             para_hit = False
-            orig_runs = originals[key][3]
-            for ri, run in enumerate(para.runs):
-                # só troca texto que JÁ estava no modelo: um valor colocado por outra regra no mesmo parágrafo
-                # nunca é trocado de novo (ex.: 70/30 -> '70%' entrava no lugar de '30%' e depois virava '30%' outra vez)
-                if len(orig_runs) == len(para.runs) and find not in orig_runs[ri]:
-                    continue
+            for run in para.runs:
                 if mode == "exact" and run.text == find:
                     run.text = value
                     applied = para_hit = True

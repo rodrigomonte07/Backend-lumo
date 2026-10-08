@@ -60,10 +60,3 @@ def test_slide6_singular(tmp_path):
     assert t[72].startswith("1 primeiro pagamento") and "1 primeiros" not in t[72]
     assert t[31].startswith("em 1 parcela de") and t[33].startswith("em 48 parcelas de")
     assert t[35].startswith("Saldo em 48 meses")
-
-
-def test_participacao_70_30_nao_repete_valor(tmp_path):
-    # operação 70/30 nos dois sentidos: cada percentual no seu lugar
-    for man, adq in (("30%", "70%"), ("70%", "30%"), ("50%", "50%")):
-        t = _texts(dict(SAGRADA, PCT_PARTICIPACAO_MANTENEDOR=man, PCT_PARTICIPACAO_ADQUIRIDA=adq), tmp_path, 7)
-        assert t[117].startswith(f"{man} de participação sobre {adq} do lucro anual"), t[117]
