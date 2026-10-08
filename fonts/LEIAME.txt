@@ -1,0 +1,5 @@
+Fontes extraídas do próprio template (ppt/fonts/*.fntdata, formato EOT) e renomeadas para que o nome da
+família seja IGUAL ao 'typeface' usado no .pptx (ex.: 'Eastman Alternate Trial Bold').
+
+ATENÇÃO DE LICENÇA: 'Eastman Alternate Trial' é versão de teste (trial). Para uso comercial, adquira a licença
+da fonte e substitua os arquivos desta pasta mantendo os mesmos nomes de família.

@@ -18,6 +18,8 @@ em cima do arquivo .pptx original do Canva.
 import json
 import os
 import subprocess
+import tempfile
+import shutil
 import uuid
 from pathlib import Path
 
@@ -26,7 +28,6 @@ from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pptx import Presentation
 
 from . import mail_merge
 
@@ -113,20 +114,19 @@ async def gerar_proposta(
 
     field_map = json.loads(FIELD_MAP_PATH.read_text(encoding="utf-8"))
 
-    prs = Presentation(str(TEMPLATE_PATH))
-    report = {"applied": 0, "not_found": [], "missing_tokens": set(), "errors": [], "photo": None}
-    mail_merge.apply_field_map(prs, field_map, data, report)
-
     file_id = uuid.uuid4().hex
     out_path = PPTX_DIR / f"{file_id}.pptx"
-    prs.save(str(out_path))
 
+    upload_path = None
     if foto_fachada is not None:
-        upload_path = UPLOADS_DIR / f"{file_id}_{foto_fachada.filename}"
+        upload_path = UPLOADS_DIR / f"{file_id}_{Path(foto_fachada.filename or 'foto').name}"
         upload_path.write_bytes(await foto_fachada.read())
-        mail_merge.replace_photo(str(out_path), str(upload_path), report)
-    else:
-        report["photo"] = "nenhuma foto enviada — mantida a foto original do template"
+
+    report = mail_merge.new_report()
+    try:
+        mail_merge.generate(TEMPLATE_PATH, field_map, data, out_path, str(upload_path) if upload_path else None, report)
+    except Exception as e:  # foto corrompida, template inválido etc.
+        raise HTTPException(500, f"Falha ao gerar a proposta: {e}")
 
     status = "ok" if not report["missing_tokens"] and not report["errors"] else "ok_com_avisos"
 
@@ -141,6 +141,11 @@ async def gerar_proposta(
                 "tokens_faltando": sorted(report["missing_tokens"]),
                 "regras_nao_encontradas": report["not_found"],
                 "erros": report["errors"],
+                "foto": report["photo"],
+                "valores_derivados": report.get("valores_derivados", []),
+                "inconsistencias": report.get("inconsistencias", []),
+                "ajustes_de_fonte": report.get("ajustes_de_fonte", []),
+                "ajustes_de_largura": report.get("ajustes_de_largura", []),
             },
         }
     )
@@ -231,19 +236,45 @@ def _convert_with_aspose(src_path: Path) -> Path:
     return pdf_path
 
 
+# Imagens sem recompressão JPEG e sem reduzir resolução (fotos e laterais ficam nítidas no PDF)
+PDF_FILTER = ('pdf:impress_pdf_Export:{"ReduceImageResolution":{"type":"boolean","value":"false"},'
+              '"UseLosslessCompression":{"type":"boolean","value":"true"}}')
+
+
 def _convert_with_libreoffice(src_path: Path) -> Path:
-    result = subprocess.run(
-        ["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(PDF_DIR), str(src_path)],
-        capture_output=True,
-        text=True,
-        timeout=90,
-    )
+    # O LibreOffice distribui a entrelinha de forma diferente do Canva/PowerPoint: o texto sai alguns pontos
+    # deslocado. Convertemos uma CÓPIA ajustada (o .pptx original que o cliente baixa não é alterado).
+    work_dir = Path(tempfile.mkdtemp(prefix="lo_"))
+    tuned = work_dir / src_path.name
+    try:
+        mail_merge.tune_for_libreoffice(src_path, tuned)
+    except Exception:
+        shutil.copy(src_path, tuned)       # nunca falha o PDF por causa do ajuste fino
+    try:
+        result = subprocess.run(
+            [os.environ.get("LIBREOFFICE_PATH", "soffice"), f"-env:UserInstallation=file:///tmp/lo_{uuid.uuid4().hex}",
+             "--headless", "--convert-to", PDF_FILTER, "--outdir", str(PDF_DIR), str(tuned)],
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
     if result.returncode != 0:
         raise HTTPException(500, f"Falha ao converter para PDF: {result.stderr}")
     pdf_path = PDF_DIR / f"{src_path.stem}.pdf"
     if not pdf_path.exists():
         raise HTTPException(500, "Conversão terminou sem erro mas o PDF não foi encontrado.")
     return pdf_path
+
+
+def _fonts_installed():
+    """False => o PDF sairá com fonte trocada (letras espaçadas). Veja fonts/LEIAME.txt e o Dockerfile."""
+    try:
+        out = subprocess.run(["fc-list"], capture_output=True, text=True, timeout=10).stdout
+        return all(name in out for name in ("Eastman Alternate Trial Bold", "Neulis Neue Bold"))
+    except Exception:
+        return None
 
 
 @app.get("/health")
@@ -268,6 +299,8 @@ def health():
     return JSONResponse(
         {
             "status": "ok",
+            "storage_backend": os.environ.get("STORAGE_BACKEND", "local"),
+            "fontes_do_template_instaladas": _fonts_installed(),
             "template_encontrado": template_found,
             "field_map_encontrado": field_map_found,
             "template_path": str(TEMPLATE_PATH),

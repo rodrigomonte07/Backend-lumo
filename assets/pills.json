@@ -1,0 +1,508 @@
+[
+ {
+  "slide": 2,
+  "shape_id": 122,
+  "color": "FEEFE8",
+  "algn": "just",
+  "size_pt": 23.4,
+  "shape_left": 116.75,
+  "shape_top": 158.31,
+  "padx": 9.38,
+  "pad_r": 9.39,
+  "lines": [
+   {
+    "text": "O que enxergamos no Cristo Rei",
+    "x0": 116.75,
+    "x1": 511.1,
+    "top": 152.96,
+    "bottom": 184.33
+   }
+  ]
+ },
+ {
+  "slide": 3,
+  "shape_id": 47,
+  "color": "FFEFE7",
+  "algn": "l",
+  "size_pt": 16.3,
+  "shape_left": 915.83,
+  "shape_top": 319.21,
+  "padx": 6.51,
+  "pad_r": 6.51,
+  "lines": [
+   {
+    "text": "O QUE ISSO SIGNIFICA NA PRÁTICA?",
+    "x0": 915.83,
+    "x1": 1217.95,
+    "top": 320.94,
+    "bottom": 342.62
+   }
+  ]
+ },
+ {
+  "slide": 5,
+  "shape_id": 27,
+  "color": "ECF4F6",
+  "algn": "l",
+  "size_pt": 16.1,
+  "shape_left": 152.13,
+  "shape_top": 271.03,
+  "padx": 6.42,
+  "pad_r": 6.43,
+  "lines": [
+   {
+    "text": "Dos R$ 2.799.436,05 da transação, parte é destinada aos vendedores e parte é",
+    "x0": 152.13,
+    "x1": 769.99,
+    "top": 272.34,
+    "bottom": 293.93
+   },
+   {
+    "text": "investida na estrutura da escola para gerar crescimento e valor no longo prazo.",
+    "x0": 152.13,
+    "x1": 782.34,
+    "top": 293.93,
+    "bottom": 315.52
+   }
+  ]
+ },
+ {
+  "slide": 5,
+  "shape_id": 28,
+  "color": "FDECE6",
+  "algn": "l",
+  "size_pt": 36.4,
+  "shape_left": 151.11,
+  "shape_top": 339.33,
+  "padx": 14.58,
+  "pad_r": 14.58,
+  "lines": [
+   {
+    "text": "R$ 1.315.734,94",
+    "x0": 151.11,
+    "x1": 405.69,
+    "top": 346.48,
+    "bottom": 396.94
+   }
+  ]
+ },
+ {
+  "slide": 5,
+  "shape_id": 31,
+  "color": "FDECE6",
+  "algn": "l",
+  "size_pt": 18.7,
+  "shape_left": 152.13,
+  "shape_top": 516.1,
+  "padx": 7.46,
+  "pad_r": 7.47,
+  "lines": [
+   {
+    "text": "É o valor que os",
+    "x0": 152.13,
+    "x1": 309.05,
+    "top": 513.44,
+    "bottom": 535.3
+   },
+   {
+    "text": "mantenedores recebam pela",
+    "x0": 152.13,
+    "x1": 435.63,
+    "top": 535.3,
+    "bottom": 557.17
+   },
+   {
+    "text": "transação.",
+    "x0": 152.13,
+    "x1": 261.0,
+    "top": 557.17,
+    "bottom": 579.03
+   }
+  ]
+ },
+ {
+  "slide": 5,
+  "shape_id": 32,
+  "color": "D2E5E8",
+  "algn": "l",
+  "size_pt": 36.4,
+  "shape_left": 933.09,
+  "shape_top": 339.33,
+  "padx": 14.58,
+  "pad_r": 14.59,
+  "lines": [
+   {
+    "text": "R$ 1.483.701.11",
+    "x0": 933.09,
+    "x1": 1177.06,
+    "top": 346.48,
+    "bottom": 396.94
+   }
+  ]
+ },
+ {
+  "slide": 5,
+  "shape_id": 35,
+  "color": "D2E5E8",
+  "algn": "l",
+  "size_pt": 18.7,
+  "shape_left": 931.73,
+  "shape_top": 524.37,
+  "padx": 7.48,
+  "pad_r": 7.49,
+  "lines": [
+   {
+    "text": "É o capital que será",
+    "x0": 931.73,
+    "x1": 1126.87,
+    "top": 522.12,
+    "bottom": 543.31
+   },
+   {
+    "text": "reinvestido uma única vez pelo",
+    "x0": 931.73,
+    "x1": 1238.69,
+    "top": 543.31,
+    "bottom": 564.49
+   },
+   {
+    "text": "mantenedor na operação para",
+    "x0": 931.73,
+    "x1": 1240.16,
+    "top": 564.49,
+    "bottom": 585.67
+   },
+   {
+    "text": "gerar resultados.",
+    "x0": 931.73,
+    "x1": 1102.38,
+    "top": 585.67,
+    "bottom": 606.85
+   }
+  ]
+ },
+ {
+  "slide": 6,
+  "shape_id": 34,
+  "color": "C0CBBC",
+  "algn": "l",
+  "size_pt": 12.0,
+  "shape_left": 911.64,
+  "shape_top": 504.74,
+  "padx": 4.8,
+  "pad_r": 4.8,
+  "lines": [
+   {
+    "text": "3 primeiros pagamentos",
+    "x0": 911.64,
+    "x1": 1054.76,
+    "top": 504.29,
+    "bottom": 517.49
+   },
+   {
+    "text": "Pagos em 3 parcelas",
+    "x0": 911.64,
+    "x1": 1034.22,
+    "top": 517.49,
+    "bottom": 530.69
+   },
+   {
+    "text": "consecutivas após acionar a",
+    "x0": 911.64,
+    "x1": 1079.92,
+    "top": 530.69,
+    "bottom": 543.89
+   },
+   {
+    "text": "opção de compra do imóvel.",
+    "x0": 911.64,
+    "x1": 1076.93,
+    "top": 543.89,
+    "bottom": 557.09
+   }
+  ]
+ },
+ {
+  "slide": 6,
+  "shape_id": 35,
+  "color": "C0CBBC",
+  "algn": "ctr",
+  "size_pt": 12.0,
+  "shape_left": 1112.59,
+  "shape_top": 504.74,
+  "padx": 4.8,
+  "pad_r": 4.8,
+  "lines": [
+   {
+    "text": "Saldo em 60 meses",
+    "x0": 1122.46,
+    "x1": 1235.44,
+    "top": 504.29,
+    "bottom": 517.89
+   },
+   {
+    "text": "Parcelas mensais",
+    "x0": 1127.68,
+    "x1": 1230.2,
+    "top": 517.89,
+    "bottom": 531.49
+   },
+   {
+    "text": "e consecutivas",
+    "x0": 1134.7,
+    "x1": 1223.19,
+    "top": 531.49,
+    "bottom": 545.09
+   }
+  ]
+ },
+ {
+  "slide": 6,
+  "shape_id": 36,
+  "color": "C9D2C7",
+  "algn": "l",
+  "size_pt": 16.0,
+  "shape_left": 816.71,
+  "shape_top": 331.49,
+  "padx": 6.4,
+  "pad_r": 6.41,
+  "lines": [
+   {
+    "text": "PELA NEGOCIAÇÃO DO IMÓVEL",
+    "x0": 816.71,
+    "x1": 1080.42,
+    "top": 333.44,
+    "bottom": 354.84
+   }
+  ]
+ },
+ {
+  "slide": 6,
+  "shape_id": 42,
+  "color": "C0CBBC",
+  "algn": "l",
+  "size_pt": 12.0,
+  "shape_left": 778.31,
+  "shape_top": 504.74,
+  "padx": 4.8,
+  "pad_r": 4.8,
+  "lines": [
+   {
+    "text": "Fechamento",
+    "x0": 778.31,
+    "x1": 853.78,
+    "top": 504.29,
+    "bottom": 521.09
+   }
+  ]
+ },
+ {
+  "slide": 6,
+  "shape_id": 72,
+  "color": "ECF4F6",
+  "algn": "l",
+  "size_pt": 12.0,
+  "shape_left": 318.71,
+  "shape_top": 506.01,
+  "padx": 4.8,
+  "pad_r": 4.81,
+  "lines": [
+   {
+    "text": "3 primeiros pagamentos",
+    "x0": 318.71,
+    "x1": 461.82,
+    "top": 505.56,
+    "bottom": 519.16
+   },
+   {
+    "text": "Pagos em 3 parcelas",
+    "x0": 318.71,
+    "x1": 441.29,
+    "top": 519.16,
+    "bottom": 532.76
+   },
+   {
+    "text": "consecutivas",
+    "x0": 318.71,
+    "x1": 396.81,
+    "top": 532.76,
+    "bottom": 546.36
+   }
+  ]
+ },
+ {
+  "slide": 6,
+  "shape_id": 73,
+  "color": "ECF4F6",
+  "algn": "ctr",
+  "size_pt": 12.0,
+  "shape_left": 520.39,
+  "shape_top": 506.01,
+  "padx": 4.8,
+  "pad_r": 4.8,
+  "lines": [
+   {
+    "text": "Saldo em 60 meses",
+    "x0": 530.26,
+    "x1": 643.24,
+    "top": 505.56,
+    "bottom": 519.16
+   },
+   {
+    "text": "Parcelas mensais",
+    "x0": 535.49,
+    "x1": 638.0,
+    "top": 519.16,
+    "bottom": 532.76
+   },
+   {
+    "text": "e consecutivas",
+    "x0": 542.5,
+    "x1": 630.99,
+    "top": 532.76,
+    "bottom": 546.36
+   }
+  ]
+ },
+ {
+  "slide": 6,
+  "shape_id": 78,
+  "color": "ECF4F6",
+  "algn": "l",
+  "size_pt": 12.0,
+  "shape_left": 179.34,
+  "shape_top": 504.48,
+  "padx": 4.8,
+  "pad_r": 4.8,
+  "lines": [
+   {
+    "text": "Fechamento",
+    "x0": 179.34,
+    "x1": 254.81,
+    "top": 504.03,
+    "bottom": 520.83
+   }
+  ]
+ },
+ {
+  "slide": 6,
+  "shape_id": 79,
+  "color": "8EBFC6",
+  "algn": "l",
+  "size_pt": 16.0,
+  "shape_left": 224.17,
+  "shape_top": 334.18,
+  "padx": 6.4,
+  "pad_r": 6.4,
+  "lines": [
+   {
+    "text": "PELA NEGOCIAÇÃO DA ESCOLA",
+    "x0": 224.17,
+    "x1": 485.76,
+    "top": 336.13,
+    "bottom": 357.53
+   }
+  ]
+ },
+ {
+  "slide": 7,
+  "shape_id": 93,
+  "color": "E0EADE",
+  "algn": "r",
+  "size_pt": 12.5,
+  "shape_left": 370.13,
+  "shape_top": 423.85,
+  "padx": 5.01,
+  "pad_r": 5.01,
+  "lines": [
+   {
+    "text": "R$ 10.000,00 / mês",
+    "x0": 379.35,
+    "x1": 493.9,
+    "top": 426.84,
+    "bottom": 444.61
+   }
+  ]
+ },
+ {
+  "slide": 7,
+  "shape_id": 96,
+  "color": "E0EADE",
+  "algn": "just",
+  "size_pt": 12.5,
+  "shape_left": 380.35,
+  "shape_top": 506.17,
+  "padx": 5.01,
+  "pad_r": 5.01,
+  "lines": [
+   {
+    "text": "R$ 5.000,00 / mês",
+    "x0": 380.35,
+    "x1": 489.27,
+    "top": 509.16,
+    "bottom": 526.93
+   }
+  ]
+ },
+ {
+  "slide": 7,
+  "shape_id": 117,
+  "color": "C9EFE2",
+  "algn": "l",
+  "size_pt": 11.5,
+  "shape_left": 1007.26,
+  "shape_top": 544.31,
+  "padx": 4.61,
+  "pad_r": 4.61,
+  "lines": [
+   {
+    "text": "30% de participação sobre 70%",
+    "x0": 1007.26,
+    "x1": 1184.88,
+    "top": 544.72,
+    "bottom": 558.51
+   },
+   {
+    "text": "do lucro anual da operação",
+    "x0": 1007.26,
+    "x1": 1163.18,
+    "top": 558.51,
+    "bottom": 572.29
+   },
+   {
+    "text": "escolar",
+    "x0": 1007.26,
+    "x1": 1048.9,
+    "top": 572.29,
+    "bottom": 586.08
+   }
+  ]
+ },
+ {
+  "slide": 8,
+  "shape_id": 46,
+  "color": "EAEFF8",
+  "algn": "l",
+  "size_pt": 14.8,
+  "shape_left": 202.37,
+  "shape_top": 575.69,
+  "padx": 5.94,
+  "pad_r": 5.94,
+  "lines": [
+   {
+    "text": "Valor reservado exclusivamente para o tratamento",
+    "x0": 202.37,
+    "x1": 579.88,
+    "top": 575.78,
+    "bottom": 594.19
+   },
+   {
+    "text": "das obrigações identificadas atualmente.",
+    "x0": 202.37,
+    "x1": 508.73,
+    "top": 594.19,
+    "bottom": 612.61
+   }
+  ]
+ }
+]

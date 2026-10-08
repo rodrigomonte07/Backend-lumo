@@ -274,3 +274,22 @@ MIT
 ---
 
 **Status:** ✅ Pronto para produção (com ressalvas de PDF acima)
+
+
+## Fidelidade ao modelo do Canva (como funciona)
+
+O gerador parte do .pptx original e usa o PDF exportado do Canva (`assets/modelo_canva_referencia.pdf`) como gabarito:
+
+| Arquivo em `assets/` | O que guarda | Gerado por |
+|---|---|---|
+| `edges/` | laterais (e cantos da capa/fecho) como UMA imagem por lado | `tools/build_edges.py` |
+| `pills.json` | fundos arredondados atrás de textos (o Canva não exporta no .pptx) | `tools/build_pills.py` |
+| `line_breaks.json` | quebras de linha exatas do Canva | `tools/build_breaks.py` |
+| `line_pitch.json` | espaçamento real entre linhas | `tools/build_pitch.py` |
+| `lo_offsets.json` | ajuste vertical só para a conversão em PDF (LibreOffice) | `tools/build_lo_offsets.py` |
+
+**Se trocar o template/PDF do Canva**, rode nesta ordem (precisa de `soffice`, `poppler-utils` e `pip install -r requirements-tools.txt`):
+`build_edges.py`, `build_pills.py`, `build_breaks.py`, `build_pitch.py`, `build_lo_offsets.py`.
+
+Slide 2: a grade de 87 bonequinhos e os colchetes seguem a % de ocupação (`PERCENTUAL_OCUPACAO`).
+As duas "pizzas" são ilustrações fixas do modelo (um quarto destacado), não gráficos de dados.
