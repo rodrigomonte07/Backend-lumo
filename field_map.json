@@ -605,5 +605,37 @@
     "mode": "contains",
     "find": "Saldo em 60 meses",
     "optional": true
+  },
+  {
+    "token": "S7_TITULO_TOTAL_APOS",
+    "slide": 7,
+    "shape_id": 9001,
+    "mode": "exact",
+    "find": "Total mensal nas 3 parcelas iniciais",
+    "optional": true
+  },
+  {
+    "token": "S7_MEDIO_TOTAL_APOS",
+    "slide": 7,
+    "shape_id": 9002,
+    "mode": "exact",
+    "find": "R$ 35.000,00",
+    "optional": true
+  },
+  {
+    "token": "S7_TITULO_TOTAL_APOS",
+    "slide": 7,
+    "shape_id": 9003,
+    "mode": "exact",
+    "find": "Total mensal nas 3 parcelas iniciais",
+    "optional": true
+  },
+  {
+    "token": "S7_LONGO_TOTAL_APOS",
+    "slide": 7,
+    "shape_id": 9004,
+    "mode": "exact",
+    "find": "R$ 69.668,72",
+    "optional": true
   }
 ]

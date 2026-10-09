@@ -491,7 +491,7 @@ def _derive_installment_texts(d, report):
         return "a parcela inicial" if q == 1 else f"as {q} parcelas iniciais"
 
     def titulo(q):
-        return "Total mensal na parcela inicial" if q == 1 else f"Total mensal nas {q} parcelas iniciais"
+        return "Total na parcela inicial" if q == 1 else f"Total nas {q} parcelas iniciais"
 
     put("S7_MEDIO_ENTRADA_NEGOCIO", _parc(qe_esc, v_ent_esc) if qe_esc and v_ent_esc else None,
         ["ESCOLA_QTD_PARCELAS_ENTRADA", "MEDIO_PARCELA_ENTRADA_NEGOCIO"])
@@ -509,6 +509,16 @@ def _derive_installment_texts(d, report):
         if qe_imo and qs_esc and v_sal_esc and qs_imo and v_sal_imo else None,
         ["IMOVEL_QTD_PARCELAS_ENTRADA", "ESCOLA_QTD_PARCELAS_SALDO", "LONGO_PARCELA_SALDO_NEGOCIO",
          "IMOVEL_QTD_PARCELAS_SALDO", "IMOVEL_VALOR_PARCELA_SALDO"])
+    # Total mensal depois das parcelas iniciais: médio = pró-labore + bônus/aluguel; longo = pró-labore + parcela do negócio
+    def soma(a, b):
+        x, y = _brl(d.get(a)), _brl(d.get(b))
+        return _fmt_brl(round(x + y, 2)) if x is not None and y is not None else None
+
+    d["S7_TITULO_TOTAL_APOS"] = "Total mensal"
+    put("S7_MEDIO_TOTAL_APOS", soma("MEDIO_PROLABORE_MENSAL", "MEDIO_ALUGUEL_TRANSITORIO_MENSAL"),
+        ["MEDIO_PROLABORE_MENSAL", "MEDIO_ALUGUEL_TRANSITORIO_MENSAL"])
+    put("S7_LONGO_TOTAL_APOS", soma("LONGO_PROLABORE_MENSAL", "LONGO_PARCELA_SALDO_NEGOCIO"),
+        ["LONGO_PROLABORE_MENSAL", "LONGO_PARCELA_SALDO_NEGOCIO"])
     put("S7_TITULO_TOTAL_MEDIO", titulo(qe_esc) if qe_esc else None, ["ESCOLA_QTD_PARCELAS_ENTRADA"])
     put("S7_TITULO_TOTAL_LONGO", titulo(qe_imo) if qe_imo else None, ["IMOVEL_QTD_PARCELAS_ENTRADA"])
 
@@ -1231,6 +1241,43 @@ def _flip_rotated_pictures(prs):
             xfrm.set("rot", "0")
 
 
+def add_monthly_total_balloons(prs, data):
+    """
+    Slide 7: um segundo balão "Total mensal" abaixo do balão de cada etapa (médio e longo), com o valor das
+    parcelas mensais DEPOIS da(s) parcela(s) inicial(is). Clona o balão do modelo (fundo + título + valor); os
+    textos entram pelas regras do field_map (ids 9001-9004). Sem o valor calculado, o balão não é criado.
+    """
+    import copy
+    slide = list(prs.slides)[6]
+    tree = slide.shapes._spTree
+    P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+    dy = int(88 / 1600 * prs.slide_width)
+    specs = ((8, 110, 102, 9001, 9002, "S7_MEDIO_TOTAL_APOS"), (11, 111, 103, 9003, 9004, "S7_LONGO_TOTAL_APOS"))
+    next_id = max(int(e.get("id")) for e in tree.iter(P + "cNvPr")) + 1
+    made = 0
+    for grp_id, title_id, value_id, new_title, new_value, token in specs:
+        if not str(data.get(token, "")).strip():
+            continue
+        shapes = {sh.shape_id: sh for sh in slide.shapes}
+        if not all(k in shapes for k in (grp_id, title_id, value_id)):
+            continue
+        for src_id, fixed in ((grp_id, None), (title_id, new_title), (value_id, new_value)):
+            src = shapes[src_id]
+            el = copy.deepcopy(src._element)
+            for c in el.iter(P + "cNvPr"):
+                if fixed:
+                    c.set("id", str(fixed))
+                else:
+                    c.set("id", str(next_id))
+                    next_id += 1
+            src._element.addnext(el)
+            clone = [sh for sh in slide.shapes if sh._element is el][0]
+            clone.top = clone.top + dy
+            clone.name = (clone.name or "") + " (total mensal)"
+            made += 1
+    return made
+
+
 def tune_for_libreoffice(src_pptx, dst_pptx, offsets_path=LO_OFFSETS_JSON):
     """
     Cria uma cópia do .pptx pronta para o LibreOffice gerar o PDF: sobe/desce cada caixa de texto pelo
@@ -1240,6 +1287,11 @@ def tune_for_libreoffice(src_pptx, dst_pptx, offsets_path=LO_OFFSETS_JSON):
     prs = Presentation(str(src_pptx))
     if Path(offsets_path).exists():
         table = json.load(open(offsets_path))
+        # os balões "Total mensal" clonados no slide 7 usam o mesmo ajuste do balão original
+        s7 = table.get("7", {})
+        for new_id, src_id in (("9001", "110"), ("9002", "102"), ("9003", "111"), ("9004", "103")):
+            if src_id in s7:
+                s7[new_id] = s7[src_id]
         slides = list(prs.slides)
         for sno, shapes in table.items():
             slide = slides[int(sno) - 1]
@@ -1270,6 +1322,7 @@ def generate(template_path, field_map, data, out_path, photo_path=None, report=N
     data = derive_fields(data, report)
     normalize_line_breaks(prs, field_map)
     apply_line_pitch(prs)
+    add_monthly_total_balloons(prs, data)
     apply_field_map(prs, field_map, data, report)
     finalize_nowrap_boxes(prs)
     apply_capacity_graphic(prs, data, report)

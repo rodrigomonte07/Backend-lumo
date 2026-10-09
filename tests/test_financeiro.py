@@ -40,7 +40,7 @@ def test_sagrada_familia_slide7(tmp_path):
     assert t[100] == "48 parcelas de R$ 7.676,55" and t[99] == "1 parcela de R$ 145.592,45"
     assert t[92] == ("Após a parcela inicial, os saldos passam para 48 parcelas de R$ 7.676,55 no negócio "
                      "e 48 parcelas de R$ 27.298,58 no imóvel.")
-    assert t[110] == t[111] == "Total mensal na parcela inicial"
+    assert t[110] == t[111] == "Total na parcela inicial"
     assert (t[101], t[102], t[103]) == ("R$ 10.000,00", "R$ 50.941,57", "R$ 160.269,00")
     assert t[117].startswith("30% de participação sobre 70%")
     joined = " ".join(t.values())
@@ -50,7 +50,7 @@ def test_sagrada_familia_slide7(tmp_path):
 def test_cristo_rei_slide7(tmp_path):
     t = _texts(CRISTO, tmp_path, 7)
     assert t[98] == "3 parcelas de R$ 9.712,93" and t[100] == "60 parcelas de R$ 2.708,98"
-    assert t[110] == "Total mensal nas 3 parcelas iniciais"
+    assert t[110] == "Total nas 3 parcelas iniciais"
     assert t[103] == "R$ 69.668,72"
 
 
@@ -60,3 +60,10 @@ def test_slide6_singular(tmp_path):
     assert t[72].startswith("1 primeiro pagamento") and "1 primeiros" not in t[72]
     assert t[31].startswith("em 1 parcela de") and t[33].startswith("em 48 parcelas de")
     assert t[35].startswith("Saldo em 48 meses")
+
+
+def test_total_mensal_apos_parcela_inicial(tmp_path):
+    t = _texts(SAGRADA, tmp_path, 7)
+    assert t[9001] == t[9003] == "Total mensal"
+    assert t[9002] == "R$ 10.000,00"      # pró-labore 7.000 + bônus 3.000
+    assert t[9004] == "R$ 14.676,55"      # pró-labore 7.000 + 48 parcelas do negócio 7.676,55
