@@ -62,8 +62,8 @@ def test_slide6_singular(tmp_path):
     assert t[35].startswith("Saldo em 48 meses")
 
 
-def test_total_mensal_apos_parcela_inicial(tmp_path):
+
+def test_slide7_sem_balao_total_mensal(tmp_path):
     t = _texts(SAGRADA, tmp_path, 7)
-    assert t[9001] == t[9003] == "Total mensal"
-    assert t[9002] == "R$ 10.000,00"      # pró-labore 7.000 + bônus 3.000
-    assert t[9004] == "R$ 14.676,55"      # pró-labore 7.000 + 48 parcelas do negócio 7.676,55
+    assert not any("Total mensal" == v for v in t.values())
+    assert t[110] == "Total na parcela inicial"
