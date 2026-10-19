@@ -471,7 +471,8 @@ def apply_cash_rule(d, report):
             _dec(d.get(f"{front}_VALOR_PARCELA_{kind}"))
         if t and pa:
             n = t / pa
-            if abs(n - n.to_integral_value()) < Decimal("0.02") * max(Decimal(1), n.to_integral_value()):
+            if abs(n - n.to_integral_value()) < Decimal("0.02") * max(Decimal(1), n.to_integral_value()) \
+                    and 1 <= n.to_integral_value() <= 120:
                 return int(n.to_integral_value())
         return None
 
