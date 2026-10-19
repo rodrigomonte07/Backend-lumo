@@ -203,14 +203,14 @@
     "find": "47%"
   },
   {
-    "token": "VALOR_TOTAL_TRANSACAO",
+    "token": "S5_BASE_PERCENTUAL",
     "slide": 5,
     "shape_id": 18,
     "mode": "exact",
     "find": "R$ 2.799.436,05"
   },
   {
-    "token": "VALOR_TOTAL_TRANSACAO",
+    "token": "S5_BASE_PERCENTUAL",
     "slide": 5,
     "shape_id": 27,
     "mode": "contains",
@@ -604,6 +604,30 @@
     "shape_id": 73,
     "mode": "contains",
     "find": "Saldo em 60 meses",
+    "optional": true
+  },
+  {
+    "token": "S5_LBL_TOTAL_1",
+    "slide": 5,
+    "shape_id": 16,
+    "mode": "exact",
+    "find": "DO TOTAL",
+    "optional": true
+  },
+  {
+    "token": "S5_LBL_TOTAL_2",
+    "slide": 5,
+    "shape_id": 16,
+    "mode": "exact",
+    "find": "DA TRANSAÇÃO",
+    "optional": true
+  },
+  {
+    "token": "S5_TXT_DA_BASE",
+    "slide": 5,
+    "shape_id": 27,
+    "mode": "contains",
+    "find": "da transação",
     "optional": true
   }
 ]

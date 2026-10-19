@@ -349,6 +349,188 @@ def _fmt_brl(v):
     return "R$ " + f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+from decimal import Decimal, ROUND_HALF_UP
+
+_CENT = Decimal("0.01")
+
+
+def _dec(v):
+    """Valor monetário -> Decimal. Aceita 'R$ 1.234,56', '1234,56', 1234.56 (None se não der para ler)."""
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return Decimal(str(v))
+    t = str(v).strip().replace("R$", "").replace(" ", "")
+    if not t or not re.search(r"\d", t):
+        return None
+    neg = t.startswith("-")
+    t = t.lstrip("-")
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    elif t.count(".") > 1 or re.fullmatch(r"\d{1,3}\.\d{3}", t):
+        t = t.replace(".", "")
+    try:
+        x = Decimal(re.sub(r"[^0-9.]", "", t))
+    except Exception:
+        return None
+    return -x if neg else x
+
+
+def _pct_dec(v):
+    """'55%' / '55,5%' / 55 -> Decimal(55) (fração 0.55 vira 55)."""
+    if v is None or isinstance(v, bool):
+        return None
+    x = _dec(str(v).replace("%", "")) if isinstance(v, str) else _dec(v)
+    if x is None:
+        return None
+    if not (isinstance(v, str) and "%" in v) and 0 < x <= 1:
+        x *= 100
+    return x
+
+
+def _q(x):
+    return Decimal(x).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
+def _money(x):
+    return "R$ " + f"{_q(x):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _pct_txt(x):
+    x = Decimal(x).normalize()
+    t = format(x, "f")
+    return t.replace(".", ",") + "%"
+
+
+def _truthy(v):
+    return str(v).strip().lower() in ("1", "true", "sim", "s", "yes", "ativa", "ativo", "x")
+
+
+def _split_parcelas(total, n):
+    """n parcelas arredondadas a 2 casas; a diferença de centavos vai na ÚLTIMA. Retorna (parcela_padrão, ultima)."""
+    n = max(1, int(n))
+    p = _q(total / n)
+    return p, _q(total - p * (n - 1))
+
+
+def apply_cash_rule(d, report):
+    """
+    Regra única de Cash-Out / Cash-In (mesma conta do CRM e do contrato SPA).
+      subtotal  = operação escolar + imóvel
+      exposição = subtotal - dívida assumida (só com assunção de dívida ativa)
+      cash-out/in total = exposição x % do dossiê
+      a dívida só abate a ESCOLA: base escola = operação escolar - dívida; base imóvel = valor do imóvel
+      entrada/saldo/parcelas de cada frente sobre o cash-out DA FRENTE (% de entrada e nº de parcelas do dossiê)
+    Devolve True se aplicou (faltando dados, os valores do CRM ficam como vieram).
+    """
+    notes = report.setdefault("valores_derivados", [])
+    esc = _dec(d.get("VALOR_OPERACAO_ESCOLAR"))
+    imo = _dec(d.get("VALOR_PATRIMONIO_IMOBILIARIO"))
+    p_out, p_in = _pct_dec(d.get("PERCENTUAL_CASH_OUT")), _pct_dec(d.get("PERCENTUAL_CASH_IN"))
+    if p_out is None and p_in is not None:
+        p_out = Decimal(100) - p_in
+    if p_in is None and p_out is not None:
+        p_in = Decimal(100) - p_out
+    if esc is None or imo is None or p_out is None:
+        return False
+    if p_out + p_in != Decimal(100):
+        report.setdefault("inconsistencias", []).append(
+            f"PERCENTUAL_CASH_OUT ({p_out}%) + PERCENTUAL_CASH_IN ({p_in}%) não fecham 100% — usei Cash-In = 100% - Cash-Out")
+        p_in = Decimal(100) - p_out
+
+    divida = _dec(d.get("VALOR_ASSUNCAO_DIVIDA") if d.get("VALOR_ASSUNCAO_DIVIDA") not in (None, "") else d.get("VALOR_DIVIDA_ASSUMIDA"))
+    flag = d.get("ASSUNCAO_DIVIDA_ATIVA")
+    ativa = (_truthy(flag) if flag not in (None, "") else bool(divida and divida > 0)) and bool(divida and divida > 0)
+    if not ativa:
+        divida = Decimal(0)
+
+    subtotal = _q(esc + imo)
+    exposicao = _q(subtotal - divida)
+    out_total = _q(exposicao * p_out / 100)
+    in_total = _q(exposicao - out_total)
+
+    base_esc = _q(esc - divida)
+    out_esc = _q(base_esc * p_out / 100)
+    in_esc = _q(base_esc - out_esc)
+    base_imo = _q(imo)
+    out_imo = _q(base_imo * p_out / 100)
+    in_imo = _q(base_imo - out_imo)
+    if out_esc + out_imo != out_total:   # no máximo centavos de arredondamento: a frente da escola absorve
+        notes.append(f"Cash-Out das frentes ({_money(out_esc + out_imo)}) diferia do total ({_money(out_total)}) em "
+                     f"centavos de arredondamento; ajustado na escola")
+        out_esc = _q(out_total - out_imo)
+        in_esc = _q(base_esc - out_esc)
+
+    def qty(front, kind):
+        for k in (f"{front}_QTD_PARCELAS_{kind}", f"QTD_PARCELAS_{kind}", f"{front}_N_PARCELAS_{kind}"):
+            v = _qtd(d.get(k))
+            if v:
+                return v
+        # sem a quantidade no payload: deduz do que o CRM mandou (total da etapa / valor da parcela)
+        t, pa = _dec(d.get(f"{front}_VALOR_{'ENTRADA' if kind == 'ENTRADA' else 'SALDO'}_TOTAL")), \
+            _dec(d.get(f"{front}_VALOR_PARCELA_{kind}"))
+        if t and pa:
+            n = t / pa
+            if abs(n - n.to_integral_value()) < Decimal("0.02") * max(Decimal(1), n.to_integral_value()):
+                return int(n.to_integral_value())
+        return None
+
+    def entrada_pct(front, cash_out):
+        for k in (f"{front}_PERCENTUAL_ENTRADA", "PERCENTUAL_ENTRADA"):
+            v = _pct_dec(d.get(k))
+            if v is not None:
+                return v
+        # sem o % no payload: usa a proporção entrada/total que o CRM já mandou para a frente
+        e, t = _dec(d.get(f"{front}_VALOR_ENTRADA_TOTAL")), _dec(d.get(f"{front}_TOTAL_DESTINADO_VENDEDOR"))
+        if e is not None and t:
+            return e / t * 100
+        return None
+
+    d["VALOR_SUBTOTAL_TRANSACAO"] = _money(subtotal)
+    d["VALOR_CASH_OUT"], d["VALOR_CASH_IN"] = _money(out_total), _money(in_total)
+    d["PERCENTUAL_CASH_OUT"], d["PERCENTUAL_CASH_IN"] = _pct_txt(p_out), _pct_txt(p_in)
+    d["ESCOLA_TOTAL_DESTINADO_VENDEDOR"], d["IMOVEL_TOTAL_DESTINADO_VENDEDOR"] = _money(out_esc), _money(out_imo)
+    d["ESCOLA_VALOR_CASH_IN"], d["IMOVEL_VALOR_CASH_IN"] = _money(in_esc), _money(in_imo)
+    d["S5_DIVIDA_ATIVA"] = "1" if ativa else ""
+    if ativa:
+        d["S5_SUBTOTAL"], d["S5_DIVIDA"], d["S5_EXPOSICAO"] = _money(subtotal), _money(divida), _money(exposicao)
+    d["S5_BASE_PERCENTUAL"] = _money(exposicao)
+    notes.append(
+        f"Cash-Out/Cash-In pela regra única: subtotal {_money(subtotal)}"
+        + (f" - dívida {_money(divida)}" if ativa else "") + f" = exposição {_money(exposicao)}; "
+        f"Cash-Out {_money(out_total)} (escola {_money(out_esc)} + imóvel {_money(out_imo)}), Cash-In {_money(in_total)}")
+
+    for front, cash in (("ESCOLA", out_esc), ("IMOVEL", out_imo)):
+        pe = entrada_pct(front, cash)
+        qe, qs = qty(front, "ENTRADA"), qty(front, "SALDO")
+        if pe is None or not qe or not qs:
+            report.setdefault("inconsistencias", []).append(
+                f"{front}: faltam % de entrada e/ou nº de parcelas — entrada/saldo/parcelas ficaram como o CRM enviou "
+                f"(envie PERCENTUAL_ENTRADA, {front}_QTD_PARCELAS_ENTRADA e {front}_QTD_PARCELAS_SALDO)")
+            continue
+        entrada = _q(cash * pe / 100)
+        saldo = _q(cash - entrada)
+        pe_par, _ = _split_parcelas(entrada, qe)
+        ps_par, ps_last = _split_parcelas(saldo, qs)
+        d[f"{front}_VALOR_ENTRADA_TOTAL"] = _money(entrada)
+        d[f"{front}_VALOR_SALDO_TOTAL"] = _money(saldo)
+        d[f"{front}_VALOR_PARCELA_ENTRADA"] = _money(pe_par)
+        d[f"{front}_VALOR_PARCELA_SALDO"] = _money(ps_par)
+        d[f"{front}_QTD_PARCELAS_ENTRADA"], d[f"{front}_QTD_PARCELAS_SALDO"] = str(qe), str(qs)
+        d[f"{front}_N_PARCELAS_ENTRADA"], d[f"{front}_N_PARCELAS_SALDO"] = str(qe), str(qs)
+        if ps_last != ps_par:
+            notes.append(f"{front}: saldo {_money(saldo)} em {qs}x de {_money(ps_par)}; última parcela {_money(ps_last)} (centavos)")
+    # slide 7 usa os mesmos números da frente (nada divergente entre slides)
+    for tok, src in (("MEDIO_PARCELA_ENTRADA_NEGOCIO", "ESCOLA_VALOR_PARCELA_ENTRADA"),
+                     ("LONGO_PARCELA_SALDO_NEGOCIO", "ESCOLA_VALOR_PARCELA_SALDO"),
+                     ("LONGO_PARCELA_ENTRADA_IMOVEL", "IMOVEL_VALOR_PARCELA_ENTRADA")):
+        if src in d and d.get(tok) != d[src]:
+            if tok in d:
+                notes.append(f"{tok}: CRM enviou '{d[tok]}', recalculado '{d[src]}'")
+            d[tok] = d[src]
+    return True
+
+
 def derive_fields(data, report):
     """
     Completa/corrige campos que são aritmética pura dos outros, para a proposta
@@ -364,9 +546,16 @@ def derive_fields(data, report):
         d["MATRICULAS_POTENCIAIS"] = "+" + mp
         notes.append(f"MATRICULAS_POTENCIAIS padronizado com sinal: '{d['MATRICULAS_POTENCIAIS']}'")
 
+    cash_rule = apply_cash_rule(d, report)
+
+    if not cash_rule and d.get("VALOR_TOTAL_TRANSACAO"):
+        d["S5_BASE_PERCENTUAL"] = d["VALOR_TOTAL_TRANSACAO"]
+    if d.get("S5_DIVIDA_ATIVA"):   # base dos percentuais passou a ser a exposição financeira: ajusta os rótulos
+        d["S5_LBL_TOTAL_1"], d["S5_LBL_TOTAL_2"], d["S5_TXT_DA_BASE"] = "DA EXPOSIÇÃO", "FINANCEIRA", "da exposição"
+
     total = _brl(d.get("VALOR_TOTAL_TRANSACAO"))
     cash_out = _brl(d.get("VALOR_CASH_OUT"))
-    if total is not None and cash_out is not None and total > 0:
+    if not cash_rule and total is not None and cash_out is not None and total > 0:
         cash_in = round(total - cash_out, 2)
         if "VALOR_CASH_IN" not in d or abs((_brl(d.get("VALOR_CASH_IN")) or -1) - cash_in) > 0.01:
             d["VALOR_CASH_IN"] = _fmt_brl(cash_in)
@@ -1231,6 +1420,61 @@ def _flip_rotated_pictures(prs):
             xfrm.set("rot", "0")
 
 
+def add_debt_equation(prs, data, report):
+    """
+    Slide 5, só com assunção de dívida ativa: mostra a conta explícita
+    "Subtotal da transação - Assunção da dívida = Exposição financeira" (base dos percentuais de Cash-Out/Cash-In).
+    """
+    if not data.get("S5_DIVIDA_ATIVA"):
+        return
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+    slide = list(prs.slides)[4]
+    px = prs.slide_width / 1600.0
+    x, y, w, h = 812, 698, 585, 148
+
+    box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Emu(int(x * px)), Emu(int(y * px)), Emu(int(w * px)), Emu(int(h * px)))
+    box.name = "Conta da exposição financeira"
+    box.adjustments[0] = 0.1
+    box.fill.solid(); box.fill.fore_color.rgb = RGBColor.from_string("FEF3E5")
+    box.line.fill.background()
+    st = box._element.find("{http://schemas.openxmlformats.org/presentationml/2006/main}style")
+    if st is not None:
+        box._element.remove(st)
+
+    rows = (("Subtotal da transação", data["S5_SUBTOTAL"], "003049", False),
+            ("\u2212 Assunção da dívida", data["S5_DIVIDA"], "003049", False),
+            ("= Exposição financeira", data["S5_EXPOSICAO"], "F14916", True))
+    pad = 22
+    for col, (cx, cw, align) in enumerate(((x + pad, 300, PP_ALIGN.LEFT), (x + w - pad - 240, 240, PP_ALIGN.RIGHT))):
+        tb = slide.shapes.add_textbox(Emu(int(cx * px)), Emu(int((y + 16) * px)), Emu(int(cw * px)), Emu(int(92 * px)))
+        tb.name = "Conta da exposição financeira (texto)"
+        tf = tb.text_frame
+        tf.word_wrap = False
+        tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+        tf.vertical_anchor = MSO_ANCHOR.TOP
+        for i, (label, value, color, strong) in enumerate(rows):
+            para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+            para.alignment = align
+            para.line_spacing = Pt(27)
+            run = para.add_run()
+            run.text = label if col == 0 else value
+            run.font.size = Pt(15)
+            run.font.bold = False
+            run.font.name = "Neulis Neue Bold" if (strong or col == 1) else "Neulis Neue Medium"
+            run.font.color.rgb = RGBColor.from_string(color)
+    cap = slide.shapes.add_textbox(Emu(int((x + pad) * px)), Emu(int((y + 114) * px)), Emu(int((w - 2 * pad) * px)), Emu(int(22 * px)))
+    cap.name = "Conta da exposição financeira (legenda)"
+    ctf = cap.text_frame
+    ctf.word_wrap = False
+    ctf.margin_left = ctf.margin_right = ctf.margin_top = ctf.margin_bottom = 0
+    r = ctf.paragraphs[0].add_run()
+    r.text = "Cash-Out e Cash-In calculados sobre a exposição financeira."
+    r.font.size = Pt(11); r.font.name = "Neulis Neue Medium"; r.font.color.rgb = RGBColor.from_string("003049")
+    report["conta_exposicao"] = True
+
+
 def tune_for_libreoffice(src_pptx, dst_pptx, offsets_path=LO_OFFSETS_JSON):
     """
     Cria uma cópia do .pptx pronta para o LibreOffice gerar o PDF: sobe/desce cada caixa de texto pelo
@@ -1271,6 +1515,7 @@ def generate(template_path, field_map, data, out_path, photo_path=None, report=N
     normalize_line_breaks(prs, field_map)
     apply_line_pitch(prs)
     apply_field_map(prs, field_map, data, report)
+    add_debt_equation(prs, data, report)
     finalize_nowrap_boxes(prs)
     apply_capacity_graphic(prs, data, report)
     add_pills(prs, report)

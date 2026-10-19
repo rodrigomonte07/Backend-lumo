@@ -303,3 +303,19 @@ Quantidades e valores vêm de `dados`; singular/plural pela quantidade ("1 parce
 - Participação: `PCT_PARTICIPACAO_MANTENEDOR`, `PCT_PARTICIPACAO_ADQUIRIDA`
 - Título do total: "Total mensal na parcela inicial" (1) ou "Total mensal nas N parcelas iniciais" (N>1): médio usa a entrada da escola, longo a entrada do imóvel.
 - Se faltar algum campo, o texto correspondente não é gerado e aparece em `inconsistencias` no retorno (o texto do modelo não deve ser usado nesse caso).
+
+## Cash-Out / Cash-In e assunção de dívida (slides 5 e 6)
+
+Regra única, igual à do CRM e à do contrato SPA (o gerador calcula; use `Decimal`, 2 casas, centavos na última parcela):
+
+1. Subtotal da transação = operação escolar + imóvel
+2. Exposição financeira = subtotal − dívida assumida (só com assunção de dívida ativa)
+3. Cash-Out total = exposição × % Cash-Out; Cash-In total = exposição × % Cash-In
+4. A dívida abate só a escola: base da escola = operação escolar − dívida; base do imóvel = valor do imóvel
+5. Entrada, saldo e parcelas de cada frente sobre o Cash-Out da própria frente
+
+Campos de entrada (`dados`): `VALOR_OPERACAO_ESCOLAR`, `VALOR_PATRIMONIO_IMOBILIARIO`, `PERCENTUAL_CASH_OUT`, `PERCENTUAL_CASH_IN`,
+`PERCENTUAL_ENTRADA` (ou `ESCOLA_PERCENTUAL_ENTRADA` / `IMOVEL_PERCENTUAL_ENTRADA`), `ESCOLA_QTD_PARCELAS_ENTRADA/SALDO`, `IMOVEL_QTD_PARCELAS_ENTRADA/SALDO`
+e, com dívida, `ASSUNCAO_DIVIDA_ATIVA` ("sim"/true) + `VALOR_ASSUNCAO_DIVIDA` (ou `VALOR_DIVIDA_ASSUMIDA`).
+Com essas entradas o gerador ignora os valores de Cash-Out/entrada/saldo/parcelas que vierem prontos e usa os calculados.
+Slide 5 com dívida ativa mostra "Subtotal da transação − Assunção da dívida = Exposição financeira" e os rótulos passam a "da exposição financeira".
