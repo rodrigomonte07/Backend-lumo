@@ -66,7 +66,7 @@ def test_payload_antigo_sem_campos_de_divida():
     d = dict(
         VALOR_OPERACAO_ESCOLAR="R$ 455.740,34", VALOR_PATRIMONIO_IMOBILIARIO="R$ 677.600,00",
         PERCENTUAL_CASH_OUT="55%", PERCENTUAL_CASH_IN="45%", VALOR_CASH_OUT="R$ 501.037,98", VALOR_CASH_IN="R$ 409.940,17",
-        ESCOLA_TOTAL_DESTINADO_VENDEDOR="R$ 201.478,07", ESCOLA_VALOR_ENTRADA_TOTAL="R$ 20.147,81",
+        ESCOLA_TOTAL_DESTINADO_VENDEDOR="R$ 201.478,07",   # sem ESCOLA_VALOR_ENTRADA_TOTAL (como o CRM manda)
         ESCOLA_VALOR_SALDO_TOTAL="R$ 181.330,26", ESCOLA_VALOR_PARCELA_ENTRADA="R$ 20.147,81", ESCOLA_VALOR_PARCELA_SALDO="R$ 3.777,71",
         IMOVEL_TOTAL_DESTINADO_VENDEDOR="R$ 299.559,92", IMOVEL_VALOR_ENTRADA_TOTAL="R$ 29.955,99",
         IMOVEL_VALOR_SALDO_TOTAL="R$ 269.603,93", IMOVEL_VALOR_PARCELA_ENTRADA="R$ 29.955,99", IMOVEL_VALOR_PARCELA_SALDO="R$ 5.616,75")
@@ -75,3 +75,22 @@ def test_payload_antigo_sem_campos_de_divida():
     assert o["ESCOLA_TOTAL_DESTINADO_VENDEDOR"] == "R$ 128.357,98" and o["IMOVEL_TOTAL_DESTINADO_VENDEDOR"] == "R$ 372.680,00"
     assert (o["ESCOLA_VALOR_ENTRADA_TOTAL"], o["ESCOLA_VALOR_PARCELA_SALDO"]) == ("R$ 12.835,80", "R$ 2.406,71")
     assert (o["IMOVEL_VALOR_ENTRADA_TOTAL"], o["IMOVEL_VALOR_PARCELA_SALDO"]) == ("R$ 37.268,00", "R$ 6.987,75")
+
+
+def test_slide6_escola_sem_valor_negativo(tmp_path):
+    """CRM sem ESCOLA_VALOR_ENTRADA_TOTAL: a entrada da escola era total - saldo antigo (negativa)."""
+    d = dict(VALOR_OPERACAO_ESCOLAR="R$ 455.740,34", VALOR_PATRIMONIO_IMOBILIARIO="R$ 677.600,00",
+             PERCENTUAL_CASH_OUT="55%", PERCENTUAL_CASH_IN="45%", VALOR_CASH_OUT="R$ 501.037,98", VALOR_CASH_IN="R$ 409.940,17",
+             ESCOLA_TOTAL_DESTINADO_VENDEDOR="R$ 201.478,07", ESCOLA_VALOR_SALDO_TOTAL="R$ 181.330,26",
+             ESCOLA_VALOR_PARCELA_ENTRADA="R$ 20.147,81", ESCOLA_VALOR_PARCELA_SALDO="R$ 3.777,71",
+             IMOVEL_TOTAL_DESTINADO_VENDEDOR="R$ 299.559,92", IMOVEL_VALOR_ENTRADA_TOTAL="R$ 29.955,99",
+             IMOVEL_VALOR_SALDO_TOTAL="R$ 269.603,93", IMOVEL_VALOR_PARCELA_ENTRADA="R$ 29.955,99",
+             IMOVEL_VALOR_PARCELA_SALDO="R$ 5.616,75")
+    out = tmp_path / "o.pptx"
+    mm.generate(ROOT / "modelo_rede_lumo (1).pptx", mm.load_json(ROOT / "field_map.json"), d, out)
+    prs = Presentation(str(out))
+    t6 = " | ".join(sh.text_frame.text for sh, *_ in mm._iter_shapes_abs(prs.slides[5].shapes) if sh.has_text_frame)
+    for v in ("R$ 12.835,80", "R$ 115.522,18", "R$ 2.406,71", "R$ 128.357,98", "R$ 37.268,00", "R$ 335.412,00", "R$ 6.987,75"):
+        assert v in t6, v
+    for velho in ("-52.972", "181.330,26", "3.777,71", "20.147,81", "201.478"):
+        assert velho not in t6, velho

@@ -489,14 +489,25 @@ def apply_cash_rule(d, report):
         out_esc = _q(out_total - out_imo)
         in_esc = _q(base_esc - out_esc)
 
+    def entrada_crm(front):
+        """Entrada que o CRM mandou para a frente: valor informado, ou total destinado - saldo, ou a parcela de entrada."""
+        e = _dec(crm_front.get(f"{front}_VALOR_ENTRADA_TOTAL"))
+        t = _dec(crm_front.get(f"{front}_TOTAL_DESTINADO_VENDEDOR"))
+        sd = _dec(crm_front.get(f"{front}_VALOR_SALDO_TOTAL"))
+        if e is None and t is not None and sd is not None and t - sd > 0:
+            e = t - sd
+        if e is None:
+            e = _dec(crm_front.get(f"{front}_VALOR_PARCELA_ENTRADA"))
+        return e
+
     def qty(front, kind):
         for k in (f"{front}_QTD_PARCELAS_{kind}", f"QTD_PARCELAS_{kind}", f"{front}_N_PARCELAS_{kind}"):
             v = _qtd(d.get(k))
             if v:
                 return v
         # sem a quantidade no payload: deduz do que o CRM mandou (total da etapa / valor da parcela)
-        t, pa = _dec(crm_front.get(f"{front}_VALOR_{'ENTRADA' if kind == 'ENTRADA' else 'SALDO'}_TOTAL")), \
-            _dec(crm_front.get(f"{front}_VALOR_PARCELA_{kind}"))
+        t = entrada_crm(front) if kind == "ENTRADA" else _dec(crm_front.get(f"{front}_VALOR_SALDO_TOTAL"))
+        pa = _dec(crm_front.get(f"{front}_VALOR_PARCELA_{kind}"))
         if t and pa:
             n = t / pa
             if abs(n - n.to_integral_value()) < Decimal("0.02") * max(Decimal(1), n.to_integral_value()) \
@@ -510,7 +521,7 @@ def apply_cash_rule(d, report):
             if v is not None:
                 return v
         # sem o % no payload: usa a proporção entrada/total que o CRM já mandou para a frente
-        e, t = _dec(crm_front.get(f"{front}_VALOR_ENTRADA_TOTAL")), _dec(crm_front.get(f"{front}_TOTAL_DESTINADO_VENDEDOR"))
+        e, t = entrada_crm(front), _dec(crm_front.get(f"{front}_TOTAL_DESTINADO_VENDEDOR"))
         if e is not None and t:
             return e / t * 100
         return None
@@ -603,6 +614,8 @@ def derive_fields(data, report):
         tot = _brl(d.get(f"{prefix}_TOTAL_DESTINADO_VENDEDOR"))
         saldo = _brl(d.get(f"{prefix}_VALOR_SALDO_TOTAL"))
         if f"{prefix}_VALOR_ENTRADA_TOTAL" not in d and tot is not None and saldo is not None:
+            if tot - saldo < 0:   # dados incoerentes: melhor não mostrar entrada negativa
+                continue
             d[f"{prefix}_VALOR_ENTRADA_TOTAL"] = _fmt_brl(round(tot - saldo, 2))
             notes.append(f"{prefix}_VALOR_ENTRADA_TOTAL = total destinado - saldo")
 
