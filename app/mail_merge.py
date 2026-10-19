@@ -427,24 +427,52 @@ def apply_cash_rule(d, report):
     esc = _dec(d.get("VALOR_OPERACAO_ESCOLAR"))
     imo = _dec(d.get("VALOR_PATRIMONIO_IMOBILIARIO"))
     p_out, p_in = _pct_dec(d.get("PERCENTUAL_CASH_OUT")), _pct_dec(d.get("PERCENTUAL_CASH_IN"))
+    crm_out, crm_in = _dec(d.get("VALOR_CASH_OUT")), _dec(d.get("VALOR_CASH_IN"))
+    if p_out is None and p_in is None and crm_out is not None and crm_in is not None and (crm_out + crm_in) > 0:
+        p_out = crm_out / (crm_out + crm_in) * 100
+        p_in = Decimal(100) - p_out
     if p_out is None and p_in is not None:
         p_out = Decimal(100) - p_in
     if p_in is None and p_out is not None:
         p_in = Decimal(100) - p_out
     if esc is None or imo is None or p_out is None:
         return False
+    # valores que o CRM mandou por frente (antes de serem substituídos): servem para deduzir % de entrada e nº de parcelas
+    crm_front = {f"{f}_{k}": d.get(f"{f}_{k}") for f in ("ESCOLA", "IMOVEL")
+                 for k in ("TOTAL_DESTINADO_VENDEDOR", "VALOR_ENTRADA_TOTAL", "VALOR_SALDO_TOTAL",
+                           "VALOR_PARCELA_ENTRADA", "VALOR_PARCELA_SALDO")}
     if p_out + p_in != Decimal(100):
         report.setdefault("inconsistencias", []).append(
             f"PERCENTUAL_CASH_OUT ({p_out}%) + PERCENTUAL_CASH_IN ({p_in}%) não fecham 100% — usei Cash-In = 100% - Cash-Out")
         p_in = Decimal(100) - p_out
 
-    divida = _dec(d.get("VALOR_ASSUNCAO_DIVIDA") if d.get("VALOR_ASSUNCAO_DIVIDA") not in (None, "") else d.get("VALOR_DIVIDA_ASSUMIDA"))
-    flag = d.get("ASSUNCAO_DIVIDA_ATIVA")
-    ativa = (_truthy(flag) if flag not in (None, "") else bool(divida and divida > 0)) and bool(divida and divida > 0)
+    divida = None
+    for k in ("VALOR_ASSUNCAO_DIVIDA", "VALOR_DIVIDA_ASSUMIDA", "ASSUNCAO_DIVIDA_VALOR", "DIVIDA_ASSUMIDA", "VALOR_DIVIDA"):
+        if d.get(k) not in (None, ""):
+            divida = _dec(d.get(k))
+            break
+    flag = None
+    for k in ("ASSUNCAO_DIVIDA_ATIVA", "ASSUNCAO_DIVIDA", "ASSUNCAO_DE_DIVIDA"):
+        if d.get(k) not in (None, ""):
+            flag = d.get(k)
+            break
+    subtotal = _q(esc + imo)
+    if flag is not None and not _truthy(flag):
+        divida = Decimal(0)
+    elif (divida is None or divida <= 0) and crm_out is not None and crm_in is not None:
+        # sem o campo da dívida no payload: o CRM já mandou Cash-Out e Cash-In sobre a exposição -> dívida = subtotal - (out + in)
+        implicita = _q(subtotal - (crm_out + crm_in))
+        if implicita > Decimal("0.01"):
+            divida = implicita
+            notes.append(f"Assunção de dívida deduzida dos valores do CRM: subtotal - (Cash-Out + Cash-In) = {_money(divida)}")
+    ativa = bool(divida and divida > 0)
     if not ativa:
         divida = Decimal(0)
-
-    subtotal = _q(esc + imo)
+        extras = [k for k in d if re.search(r"DIVIDA|ASSUN|CONTING", k, re.I) and k != "RESERVA_DIVIDAS_VALOR" and d.get(k) not in (None, "")]
+        if extras and flag is None:
+            report.setdefault("inconsistencias", []).append(
+                f"Campos de dívida recebidos mas não usados: {', '.join(sorted(extras))}. Para a assunção de dívida entrar na conta, envie "
+                f"ASSUNCAO_DIVIDA_ATIVA e VALOR_ASSUNCAO_DIVIDA")
     exposicao = _q(subtotal - divida)
     out_total = _q(exposicao * p_out / 100)
     in_total = _q(exposicao - out_total)
@@ -467,8 +495,8 @@ def apply_cash_rule(d, report):
             if v:
                 return v
         # sem a quantidade no payload: deduz do que o CRM mandou (total da etapa / valor da parcela)
-        t, pa = _dec(d.get(f"{front}_VALOR_{'ENTRADA' if kind == 'ENTRADA' else 'SALDO'}_TOTAL")), \
-            _dec(d.get(f"{front}_VALOR_PARCELA_{kind}"))
+        t, pa = _dec(crm_front.get(f"{front}_VALOR_{'ENTRADA' if kind == 'ENTRADA' else 'SALDO'}_TOTAL")), \
+            _dec(crm_front.get(f"{front}_VALOR_PARCELA_{kind}"))
         if t and pa:
             n = t / pa
             if abs(n - n.to_integral_value()) < Decimal("0.02") * max(Decimal(1), n.to_integral_value()) \
@@ -482,7 +510,7 @@ def apply_cash_rule(d, report):
             if v is not None:
                 return v
         # sem o % no payload: usa a proporção entrada/total que o CRM já mandou para a frente
-        e, t = _dec(d.get(f"{front}_VALOR_ENTRADA_TOTAL")), _dec(d.get(f"{front}_TOTAL_DESTINADO_VENDEDOR"))
+        e, t = _dec(crm_front.get(f"{front}_VALOR_ENTRADA_TOTAL")), _dec(crm_front.get(f"{front}_TOTAL_DESTINADO_VENDEDOR"))
         if e is not None and t:
             return e / t * 100
         return None

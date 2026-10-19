@@ -138,6 +138,7 @@ async def gerar_proposta(
             "registro_id": registro_id,
             "campos_aplicados": report["applied"],
             "avisos": {
+                "campos_recebidos": sorted(data.keys()),
                 "tokens_faltando": sorted(report["missing_tokens"]),
                 "regras_nao_encontradas": report["not_found"],
                 "erros": report["errors"],

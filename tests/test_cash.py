@@ -59,3 +59,19 @@ def test_slides_5_e_6_ceme(tmp_path):
         assert v in t6, v
     for velho in ("201.478,07", "299.559,92"):
         assert velho not in t5 and velho not in t6
+
+
+def test_payload_antigo_sem_campos_de_divida():
+    """O CRM ainda manda Cash-Out/Cash-In já sobre a exposição e frentes com a dívida repartida: a dívida é deduzida."""
+    d = dict(
+        VALOR_OPERACAO_ESCOLAR="R$ 455.740,34", VALOR_PATRIMONIO_IMOBILIARIO="R$ 677.600,00",
+        PERCENTUAL_CASH_OUT="55%", PERCENTUAL_CASH_IN="45%", VALOR_CASH_OUT="R$ 501.037,98", VALOR_CASH_IN="R$ 409.940,17",
+        ESCOLA_TOTAL_DESTINADO_VENDEDOR="R$ 201.478,07", ESCOLA_VALOR_ENTRADA_TOTAL="R$ 20.147,81",
+        ESCOLA_VALOR_SALDO_TOTAL="R$ 181.330,26", ESCOLA_VALOR_PARCELA_ENTRADA="R$ 20.147,81", ESCOLA_VALOR_PARCELA_SALDO="R$ 3.777,71",
+        IMOVEL_TOTAL_DESTINADO_VENDEDOR="R$ 299.559,92", IMOVEL_VALOR_ENTRADA_TOTAL="R$ 29.955,99",
+        IMOVEL_VALOR_SALDO_TOTAL="R$ 269.603,93", IMOVEL_VALOR_PARCELA_ENTRADA="R$ 29.955,99", IMOVEL_VALOR_PARCELA_SALDO="R$ 5.616,75")
+    o = mm.derive_fields(d, {})
+    assert o["S5_DIVIDA"] == "R$ 222.362,19" and o["S5_EXPOSICAO"] == "R$ 910.978,15"
+    assert o["ESCOLA_TOTAL_DESTINADO_VENDEDOR"] == "R$ 128.357,98" and o["IMOVEL_TOTAL_DESTINADO_VENDEDOR"] == "R$ 372.680,00"
+    assert (o["ESCOLA_VALOR_ENTRADA_TOTAL"], o["ESCOLA_VALOR_PARCELA_SALDO"]) == ("R$ 12.835,80", "R$ 2.406,71")
+    assert (o["IMOVEL_VALOR_ENTRADA_TOTAL"], o["IMOVEL_VALOR_PARCELA_SALDO"]) == ("R$ 37.268,00", "R$ 6.987,75")
