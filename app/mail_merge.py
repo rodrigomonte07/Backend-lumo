@@ -1550,6 +1550,126 @@ def new_report():
     return {"applied": 0, "not_found": [], "missing_tokens": set(), "errors": [], "photo": None}
 
 
+# ---------------------------------------------------------------------------
+# Variante "sem dívidas / sem concorrência" (slides 3 e 8) — SOMENTE para escolas marcadas
+# ---------------------------------------------------------------------------
+MODO_SEM_DIVIDAS_SEM_CONCORRENCIA = "sem_dividas_sem_concorrencia"
+# escolas com dossiê próprio (nome normalizado contém a chave) -> dados de região fixados
+ESCOLAS_MODO_ESPECIAL = {
+    "souza pimentel": {"ALUNOS_REGIAO": 299, "POPULACAO_RAIO": 1542, "CLASSE_RENDA": "D", "RAIO_KM": 5},
+}
+CRESCIMENTO_PADRAO_PCT = 8   # premissa conservadora quando o CRM não envia CRESCIMENTO_5ANOS_PCT
+
+
+_EXT = {1: "um", 2: "dois", 3: "três", 4: "quatro", 5: "cinco", 6: "seis", 7: "sete", 8: "oito", 9: "nove", 10: "dez"}
+
+
+def _fmt_int(n):
+    return f"{int(n):,}".replace(",", ".")
+
+
+def _modo_especial(data):
+    """Retorna (ativo, defaults_da_escola)."""
+    import unicodedata
+    nome = unicodedata.normalize("NFKD", str(data.get("NOME_ESCOLA", ""))).encode("ascii", "ignore").decode().lower()
+    for chave, cfg in ESCOLAS_MODO_ESPECIAL.items():
+        if chave in nome:
+            return True, cfg
+    flag = str(data.get("MODO_PROPOSTA", "")).strip().lower()
+    return flag == MODO_SEM_DIVIDAS_SEM_CONCORRENCIA, {}
+
+
+def _set_par(par, text):
+    """Troca o texto do parágrafo mantendo a formatação da 1ª run."""
+    runs = par.runs
+    if not runs:
+        return
+    runs[0].text = text
+    for r in runs[1:]:
+        r._r.getparent().remove(r._r)
+
+
+def _set_lines(shape, lines):
+    import copy
+    pars = shape.text_frame.paragraphs
+    while len(pars) < len(lines):          # precisa de mais linhas: clona o último parágrafo
+        pars[-1]._p.addnext(copy.deepcopy(pars[-1]._p))
+        pars = shape.text_frame.paragraphs
+    for i, par in enumerate(pars):
+        if i < len(lines):
+            _set_par(par, lines[i])
+        else:
+            par._p.getparent().remove(par._p)
+
+
+def apply_special_mode(prs, data, report):
+    ativo, cfg = _modo_especial(data)
+    if not ativo:
+        return
+    base = int(cfg.get("ALUNOS_REGIAO") or _brl(data.get("ALUNOS_REGIAO")) or 0)
+    pop = cfg.get("POPULACAO_RAIO") or _brl(data.get("POPULACAO_RAIO"))
+    classe = cfg.get("CLASSE_RENDA") or data.get("CLASSE_RENDA")
+    raio = int(cfg.get("RAIO_KM") or _brl(data.get("RAIO_KM")) or 5)
+    pct = _brl(str(data.get("CRESCIMENTO_5ANOS_PCT", "")).replace("%", "")) or CRESCIMENTO_PADRAO_PCT
+    pct_txt = f"{pct:g}".replace(".", ",")
+    novos = int((Decimal(base) * Decimal(str(pct)) / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    nome = str(data.get("NOME_ESCOLA", "a escola"))
+    report.setdefault("valores_derivados", []).append(
+        f"Modo especial (slides 3 e 8): base {base}, crescimento {pct_txt}% (premissa), novos alunos {novos}")
+
+    def sh(slide_no, sid):
+        for s in prs.slides[slide_no - 1].shapes:
+            if s.shape_id == sid:
+                return s
+        return None
+
+    ctx = []
+    if pop:
+        ctx.append(f"pop. {_fmt_int(pop)}")
+    if classe:
+        ctx.append(f"classe {classe}")
+    s3 = {
+        39: [_fmt_int(base)], 50: [_fmt_int(base)],
+        40: ["crianças em idade escolar"],
+        52: ["em idade escolar"],
+        41: ["0"], 42: ["escolas concorrentes", f"no raio de {_EXT.get(raio, raio)} km"],  # sem dígito: a fonte trial marca d'água o "5" neste tamanho
+        43: [f"{pct_txt}%"], 53: [f"{pct_txt}%"],
+        45: [f"+{_fmt_int(novos)}"], 55: [_fmt_int(novos)],
+        59: [f"Sem concorrentes em {raio} km: {_fmt_int(base)} em idade escolar"
+             + (f" ({', '.join(ctx)})" if ctx else "")
+             + f", +{pct_txt}% em 5 anos = cerca de {_fmt_int(novos)} alunos."],
+    }
+    for sid, lines in s3.items():
+        s = sh(3, sid)
+        if s is not None:
+            _set_lines(s, lines)
+
+    s8 = {
+        34: ["Não foram identificadas dívidas ou contingências no levantamento prévio.",
+             "Nosso objetivo é proteger o investimento e assegurar uma transição tranquila para todos."],
+        37: ["DÍVIDAS E PASSIVOS"],
+        45: ["Sem passivos identificados"],
+        46: ["Nenhuma obrigação foi identificada", "no levantamento realizado até o momento."],
+        49: ["Não há valor reservado para dívidas nesta proposta."],
+        50: ["Nenhum valor da transação é retido para passivos. Eventuais passivos serão tratados conforme o contrato."],
+    }
+    for sid, lines in s8.items():
+        s = sh(8, sid)
+        if s is not None:
+            _set_lines(s, lines)
+    for sid in (49, 50):
+        s_ = sh(8, sid)
+        if s_ is not None:
+            s_.text_frame.word_wrap = True
+    big = sh(8, 45)
+    if big is not None:
+        for r in big.text_frame.paragraphs[0].runs:
+            r.font.size = Emu(int(571119 * 0.42))
+            rPr = r._r.get_or_add_rPr()
+            rPr.attrib.pop("spc", None)
+        big.text_frame.word_wrap = False
+
+
 def generate(template_path, field_map, data, out_path, photo_path=None, report=None):
     report = report if report is not None else new_report()
     prs = Presentation(str(template_path))
@@ -1558,6 +1678,7 @@ def generate(template_path, field_map, data, out_path, photo_path=None, report=N
     apply_line_pitch(prs)
     apply_field_map(prs, field_map, data, report)
     add_debt_equation(prs, data, report)
+    apply_special_mode(prs, data, report)
     finalize_nowrap_boxes(prs)
     apply_capacity_graphic(prs, data, report)
     add_pills(prs, report)

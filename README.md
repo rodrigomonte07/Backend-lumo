@@ -319,3 +319,11 @@ Campos de entrada (`dados`): `VALOR_OPERACAO_ESCOLAR`, `VALOR_PATRIMONIO_IMOBILI
 e, com dívida, `ASSUNCAO_DIVIDA_ATIVA` ("sim"/true) + `VALOR_ASSUNCAO_DIVIDA` (ou `VALOR_DIVIDA_ASSUMIDA`).
 Com essas entradas o gerador ignora os valores de Cash-Out/entrada/saldo/parcelas que vierem prontos e usa os calculados.
 Slide 5 com dívida ativa mostra "Subtotal da transação − Assunção da dívida = Exposição financeira" e os rótulos passam a "da exposição financeira".
+
+## Variante "sem dívidas / sem concorrência" (slides 3 e 8)
+
+Ativada **somente** quando `NOME_ESCOLA` contém "Souza Pimentel" (Cesp; dados fixos: 299 em idade escolar, população 1.542, classe D, raio 5 km)
+ou quando o CRM envia `MODO_PROPOSTA = "sem_dividas_sem_concorrencia"` (nesse caso usa `ALUNOS_REGIAO`, `POPULACAO_RAIO`, `CLASSE_RENDA`, `RAIO_KM`).
+- Slide 3: "0 escolas concorrentes no raio de cinco km"; projeção = base × `CRESCIMENTO_5ANOS_PCT` (padrão 8%, **premissa** — o CRM não fornece taxa).
+- Slide 8: "Sem passivos identificados"; textos de reserva/destinação de dívida reescritos.
+Demais escolas não são afetadas. Código: `apply_special_mode` em `app/mail_merge.py`.
