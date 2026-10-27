@@ -1644,6 +1644,51 @@ def apply_special_mode(prs, data, report):
         if s is not None:
             _set_lines(s, lines)
 
+
+DILIGENCIA_DIAS_FIXO = 180   # prazo da diligência fixo (não depende do CRM)
+
+
+def _divida_declarada(data):
+    """Dívida/contingenciamento informado pelo CRM (0 se nenhum). Campos explícitos (VALOR_ASSUNCAO_DIVIDA, contingenciamento...)
+    mandam; RESERVA_DIVIDAS_VALOR só vale quando nenhum campo explícito veio no payload."""
+    explicit, best = False, Decimal(0)
+    for k, v in data.items():
+        if k == "RESERVA_DIVIDAS_VALOR" or not re.search(r"DIVIDA|CONTING|ASSUN|PASSIVO", k, re.I):
+            continue
+        if re.search(r"ATIVA|PERCENT|PCT|TXT|LBL", k, re.I) or k == "S5_DIVIDA":
+            continue
+        val = _dec(v)
+        if val is not None:
+            explicit = True
+            best = max(best, val)
+    if data.get("S5_DIVIDA"):
+        explicit = True
+        best = max(best, _dec(data.get("S5_DIVIDA")) or Decimal(0))
+    if not explicit:
+        best = _dec(data.get("RESERVA_DIVIDAS_VALOR")) or Decimal(0)
+    return best
+
+
+def apply_slide8(prs, data, report):
+    """Slide 8: diligência fixa em 180 dias e, sem dívida declarada, 'Sem passivos identificados'."""
+    slide = prs.slides[7]
+    byid = {s.shape_id: s for s in slide.shapes}
+
+    def put(sid, lines):
+        if sid in byid:
+            _set_lines(byid[sid], lines)
+
+    # diligência: 180 dias fixos (a prorrogação continua em +90, como no modelo)
+    n = DILIGENCIA_DIAS_FIXO
+    put(38, [f"DILIGÊNCIA DE {n} DIAS"])
+    put(39, [f"{n} DIAS"])
+
+    divida = _divida_declarada(data)
+    if divida > 0:
+        if "RESERVA_DIVIDAS_VALOR" not in data or not _dec(data.get("RESERVA_DIVIDAS_VALOR")):
+            put(45, [_money(divida)])   # nunca deixa o valor do modelo (R$ 130.940,86) vazar
+        return
+    report.setdefault("valores_derivados", []).append("Slide 8: sem dívida declarada -> 'Sem passivos identificados'")
     s8 = {
         34: ["Não foram identificadas dívidas ou contingências no levantamento prévio.",
              "Nosso objetivo é proteger o investimento e assegurar uma transição tranquila para todos."],
@@ -1654,14 +1699,11 @@ def apply_special_mode(prs, data, report):
         50: ["Nenhum valor da transação é retido para passivos. Eventuais passivos serão tratados conforme o contrato."],
     }
     for sid, lines in s8.items():
-        s = sh(8, sid)
-        if s is not None:
-            _set_lines(s, lines)
+        put(sid, lines)
     for sid in (49, 50):
-        s_ = sh(8, sid)
-        if s_ is not None:
-            s_.text_frame.word_wrap = True
-    big = sh(8, 45)
+        if sid in byid:
+            byid[sid].text_frame.word_wrap = True
+    big = byid.get(45)
     if big is not None:
         for r in big.text_frame.paragraphs[0].runs:
             r.font.size = Emu(int(571119 * 0.42))
@@ -1679,6 +1721,7 @@ def generate(template_path, field_map, data, out_path, photo_path=None, report=N
     apply_field_map(prs, field_map, data, report)
     add_debt_equation(prs, data, report)
     apply_special_mode(prs, data, report)
+    apply_slide8(prs, data, report)
     finalize_nowrap_boxes(prs)
     apply_capacity_graphic(prs, data, report)
     add_pills(prs, report)

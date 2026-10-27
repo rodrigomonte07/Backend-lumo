@@ -327,3 +327,8 @@ ou quando o CRM envia `MODO_PROPOSTA = "sem_dividas_sem_concorrencia"` (nesse ca
 - Slide 3: "0 escolas concorrentes no raio de cinco km"; projeção = base × `CRESCIMENTO_5ANOS_PCT` (padrão 8%, **premissa** — o CRM não fornece taxa).
 - Slide 8: "Sem passivos identificados"; textos de reserva/destinação de dívida reescritos.
 Demais escolas não são afetadas. Código: `apply_special_mode` em `app/mail_merge.py`.
+
+## Slide 8 — dívidas e diligência
+- Diligência fixa em **180 dias** (título e círculo inicial); a prorrogação segue em +90 dias. Não depende do CRM.
+- Sem dívida declarada (campos `VALOR_ASSUNCAO_DIVIDA`/contingenciamento zerados ou ausentes), qualquer escola sai com "Sem passivos identificados".
+  Campos explícitos mandam; `RESERVA_DIVIDAS_VALOR` só vale se nenhum campo explícito vier. O valor do modelo (R$ 130.940,86) nunca é usado.
