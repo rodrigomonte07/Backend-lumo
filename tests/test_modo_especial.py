@@ -47,7 +47,7 @@ def test_qualquer_escola_sem_divida_mostra_sem_passivos(tmp_path):
 def test_diligencia_fixa_em_180_dias(tmp_path):
     for dados in ({"NOME_ESCOLA": "A"}, {"NOME_ESCOLA": "B", "RESERVA_DIVIDAS_VALOR": "R$ 50.000,00", "DILIGENCIA_DIAS_INICIAL": "90 DIAS"}):
         t8 = _texts(_gerar(tmp_path, dados), 8)
-        assert "DILIGÊNCIA DE 180 DIAS" in t8 and "180 DIAS" in t8 and "DE 90 DIAS" not in t8
+        assert "DILIGÊNCIA DE 180 DIAS" in t8 and "180 DIAS" in t8 and "+60 DIAS" in t8 and "mais 60 dias" in t8 and "90" not in t8
     assert "50.000,00" in _texts(_gerar(tmp_path, {"RESERVA_DIVIDAS_VALOR": "R$ 50.000,00"}), 8)
 
 

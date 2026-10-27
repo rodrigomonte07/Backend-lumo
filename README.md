@@ -329,7 +329,7 @@ ou quando o CRM envia `MODO_PROPOSTA = "sem_dividas_sem_concorrencia"` (nesse ca
 Demais escolas não são afetadas. Código: `apply_special_mode` em `app/mail_merge.py`.
 
 ## Slide 8 — dívidas e diligência
-- Diligência fixa em **180 dias** (título e círculo inicial); a prorrogação segue em +90 dias. Não depende do CRM.
+- Diligência fixa em **180 dias** (título e círculo inicial); a prorrogação é de +60 dias (também fixa). Não depende do CRM.
 - Sem dívida declarada (campos `VALOR_ASSUNCAO_DIVIDA`/contingenciamento zerados ou ausentes), qualquer escola sai com "Sem passivos identificados".
   Vale o maior valor entre os campos de dívida/contingenciamento/reserva. O valor do modelo (R$ 130.940,86) nunca é usado.
 

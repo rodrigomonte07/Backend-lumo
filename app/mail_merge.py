@@ -1756,6 +1756,7 @@ def apply_special_mode(prs, data, report):
 
 
 DILIGENCIA_DIAS_FIXO = 180   # prazo da diligência fixo (não depende do CRM)
+PRORROGACAO_DIAS_FIXO = 60   # prorrogação fixa
 
 
 def _divida_declarada(data):
@@ -1779,10 +1780,15 @@ def apply_slide8(prs, data, report):
         if sid in byid:
             _set_lines(byid[sid], lines)
 
-    # diligência: 180 dias fixos (a prorrogação continua em +90, como no modelo)
+    # diligência: 180 dias + prorrogação de 60 dias, fixos
     n = DILIGENCIA_DIAS_FIXO
     put(38, [f"DILIGÊNCIA DE {n} DIAS"])
     put(39, [f"{n} DIAS"])
+    put(40, [f"+{PRORROGACAO_DIAS_FIXO} DIAS"])
+    if 47 in byid:   # "Poderemos prorrogar por mais 90 dias..." (pode estar dividido em vários runs)
+        for par in byid[47].text_frame.paragraphs:
+            for r in par.runs:
+                r.text = re.sub(r"\b90 dias", f"{PRORROGACAO_DIAS_FIXO} dias", r.text)
 
     divida = _divida_declarada(data)
     if divida > 0:
