@@ -56,6 +56,6 @@ def test_divida_sem_valor_de_reserva_nao_vaza_valor_do_modelo(tmp_path):
     assert "77.000,00" in t8 and "130.940,86" not in t8
 
 
-def test_campo_explicito_zero_vence_reserva_do_modelo(tmp_path):
-    t8 = _texts(_gerar(tmp_path, {"RESERVA_DIVIDAS_VALOR": "R$ 130.940,86", "VALOR_ASSUNCAO_DIVIDA": "R$ 0,00"}), 8)
-    assert "Sem passivos identificados" in t8 and "130.940,86" not in t8
+def test_reserva_positiva_e_exibida(tmp_path):
+    t8 = _texts(_gerar(tmp_path, {"RESERVA_DIVIDAS_VALOR": "R$ 50.000,00", "VALOR_ASSUNCAO_DIVIDA": "R$ 0,00"}), 8)
+    assert "50.000,00" in t8 and "Sem passivos" not in t8

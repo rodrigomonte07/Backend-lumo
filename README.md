@@ -331,4 +331,10 @@ Demais escolas não são afetadas. Código: `apply_special_mode` em `app/mail_me
 ## Slide 8 — dívidas e diligência
 - Diligência fixa em **180 dias** (título e círculo inicial); a prorrogação segue em +90 dias. Não depende do CRM.
 - Sem dívida declarada (campos `VALOR_ASSUNCAO_DIVIDA`/contingenciamento zerados ou ausentes), qualquer escola sai com "Sem passivos identificados".
-  Campos explícitos mandam; `RESERVA_DIVIDAS_VALOR` só vale se nenhum campo explícito vier. O valor do modelo (R$ 130.940,86) nunca é usado.
+  Vale o maior valor entre os campos de dívida/contingenciamento/reserva. O valor do modelo (R$ 130.940,86) nunca é usado.
+
+## Operação sem imóvel (slides 4, 6 e 7)
+Ativa quando `TIPO_OPERACAO = "sem_imovel"` (CRM: `transaction_type = operation-only`) ou, sem esse campo, quando há `VALOR_OPERACAO_ESCOLAR` e nenhum valor de imóvel no payload.
+`TIPO_OPERACAO = "com_imovel"` força o modelo completo.
+- Slide 4: sem o card do patrimônio (Operação escolar = Valor total). Slide 6: só a frente da escola. Slide 7: sem aluguel transitório/bônus e sem entrada do imóvel; totais = pró-labore + parcelas do negócio.
+- Pró-labore não enviado vira R$ 0,00; a linha "30% de participação" some quando `PCT_PARTICIPACAO_MANTENEDOR` é 0%.

@@ -435,6 +435,8 @@ def apply_cash_rule(d, report):
         p_out = Decimal(100) - p_in
     if p_in is None and p_out is not None:
         p_in = Decimal(100) - p_out
+    if imo is None and d.get("_SEM_IMOVEL"):
+        imo = Decimal(0)
     if esc is None or imo is None or p_out is None:
         return False
     # valores que o CRM mandou por frente (antes de serem substituídos): servem para deduzir % de entrada e nº de parcelas
@@ -586,6 +588,9 @@ def derive_fields(data, report):
         d["MATRICULAS_POTENCIAIS"] = "+" + mp
         notes.append(f"MATRICULAS_POTENCIAIS padronizado com sinal: '{d['MATRICULAS_POTENCIAIS']}'")
 
+    d["_SEM_IMOVEL"] = _is_sem_imovel(d)
+    if d["_SEM_IMOVEL"]:
+        notes.append("Operação sem imóvel: slides 4, 6 e 7 sem os blocos do imóvel")
     cash_rule = apply_cash_rule(d, report)
 
     if not cash_rule and d.get("VALOR_TOTAL_TRANSACAO"):
@@ -634,7 +639,23 @@ def derive_fields(data, report):
                 report.setdefault("inconsistencias", []).append(
                     f"{tot_key} / {par_key} = {n:.2f} (não é número inteiro de parcelas) — confira os dados do CRM")
     _derive_installment_texts(d, report)
+    if d.get("_SEM_IMOVEL"):   # avisos sobre o imóvel não se aplicam
+        report["inconsistencias"] = [m for m in report.get("inconsistencias", []) if "IMOVEL" not in m and "imóvel" not in m]
     return d
+
+
+def _is_sem_imovel(d):
+    """TIPO_OPERACAO='sem_imovel' (CRM) — ou, sem esse campo, escola informada e nenhum valor de imóvel no payload."""
+    tipo = str(d.get("TIPO_OPERACAO", "")).strip().lower().replace(" ", "_").replace("-", "_")
+    if tipo in ("sem_imovel", "operation_only"):
+        return True
+    if tipo in ("com_imovel", "total_acquisition", "partial_acquisition", "asset_deal"):
+        return False
+    if _dec(d.get("VALOR_OPERACAO_ESCOLAR")) is None:
+        return False
+    pat = _dec(d.get("VALOR_PATRIMONIO_IMOBILIARIO"))
+    tem_imovel = any(k.startswith("IMOVEL_") and (_dec(v) or 0) > 0 for k, v in d.items())
+    return (pat is None or pat <= 0) and not tem_imovel
 
 
 def _qtd(v):
@@ -742,6 +763,95 @@ def _derive_installment_texts(d, report):
          "IMOVEL_QTD_PARCELAS_SALDO", "IMOVEL_VALOR_PARCELA_SALDO"])
     put("S7_TITULO_TOTAL_MEDIO", titulo(qe_esc) if qe_esc else None, ["ESCOLA_QTD_PARCELAS_ENTRADA"])
     put("S7_TITULO_TOTAL_LONGO", titulo(qe_imo) if qe_imo else None, ["IMOVEL_QTD_PARCELAS_ENTRADA"])
+
+    if d.get("_SEM_IMOVEL"):
+        # sem imóvel: o total de cada etapa soma só o que aparece no slide (pró-labore + parcelas do negócio)
+        d["S7_TITULO_TOTAL_LONGO"] = titulo(qe_esc) if qe_esc else d.get("S7_TITULO_TOTAL_LONGO", "")
+        for etapa, parcela in (("CURTO", None), ("MEDIO", v_ent_esc), ("LONGO", v_sal_esc)):
+            pro = _dec(d.get(f"{etapa}_PROLABORE_MENSAL"))
+            if pro is None:
+                d[f"{etapa}_PROLABORE_MENSAL"] = "R$ 0,00"
+                miss.append(f"{etapa}_PROLABORE_MENSAL não enviado: assumido R$ 0,00 (operação sem imóvel)")
+                pro = Decimal(0)
+            total = pro + (_dec(parcela) or Decimal(0))
+            d[f"{etapa}_TOTAL_MENSAL"] = _money(total)
+
+
+def _set_runs(shape, par_idx, texts):
+    """Troca o texto run a run (mantém cores/negrito). Texto que começa com '\n' ganha quebra de linha antes. Runs sobrando ficam vazios."""
+    import copy
+    A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    par = shape.text_frame.paragraphs[par_idx]
+    for br in par._p.findall(A + "br"):               # quebras forçadas do modelo
+        par._p.remove(br)
+    runs = par.runs
+    while len(runs) < len(texts):                     # mais trechos que runs: clona o último
+        runs[-1]._r.addnext(copy.deepcopy(runs[-1]._r))
+        runs = par.runs
+    for k, r in enumerate(runs):
+        t = texts[k] if k < len(texts) else ""
+        if t.startswith("\n"):
+            br = copy.deepcopy(r._r.find(A + "rPr")) if r._r.find(A + "rPr") is not None else None
+            el = r._r.makeelement(A + "br", {})
+            if br is not None:
+                el.append(br)
+            r._r.addprevious(el)
+            t = t[1:]
+        r.text = t
+
+
+def apply_sem_imovel_layout(prs, data, report):
+    """Operação sem imóvel: remove os blocos do imóvel dos slides 4, 6 e 7 e reorganiza o que sobra."""
+    if not data.get("_SEM_IMOVEL"):
+        return
+    slides = list(prs.slides)
+
+    def ids(n):
+        return {s.shape_id: s for s in slides[n - 1].shapes}
+
+    def drop(m, lst):
+        for i in lst:
+            if i in m:
+                el = m[i]._element
+                el.getparent().remove(el)
+
+    def move(m, lst, dx=0, dy=0):
+        for i in lst:
+            sh = m.get(i)
+            if sh is not None and i in m and sh._element.getparent() is not None:
+                sh.left, sh.top = sh.left + Emu(dx * 9525), sh.top + Emu(dy * 9525)
+
+    # ---- slide 4: sem o card do patrimônio; sobram operação escolar = total
+    m = ids(4)
+    drop(m, [2, 3, 23, 24, 32, 33, 34, 35, 45])
+    move(m, [4, 5, 6, 7, 25, 26, 27, 28, 36, 37, 38, 39, 40, 41, 42, 46], dx=-295)
+    _set_runs(m[30], 0, ["Uma proposta focada na operação escolar", "\nque gera valor para todos."])
+    _set_runs(m[31], 0, ["A proposta considera o valor da ", "participação societária da operação escolar."])
+    _set_lines(m[42], ["Investimento total considerando a operação escolar."])
+    _set_runs(m[44], 0, ["A proposta valoriza o ", "potencial de crescimento", " da operação escolar", "",
+                         " e cria uma base consistente para ", "\ngeração de valor de longo prazo", " para todos os envolvidos."])
+
+    # ---- slide 6: só a frente da escola, centralizada; resumo só com o total
+    m = ids(6)
+    drop(m, [2, 3, 4, 27, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
+             11, 18, 14, 19, 46, 47, 48, 49, 50, 53])
+    move(m, [64, 65, 66, 67] + list(range(68, 81)), dx=427)
+    move(m, [45, 51, 52], dx=-560)
+    _set_lines(m[29], ["O valor destinado aos vendedores será pago pela participação societária",
+                       "da operação escolar, conforme estrutura abaixo."])
+
+    # ---- slide 7: sem aluguel transitório/bônus e sem entrada do imóvel
+    m = ids(7)
+    drop(m, [39, 57, 86, 96, 42, 58, 87, 97, 51, 118, 90, 99, 92])
+    move(m, [48, 120, 89, 98, 91], dy=-57)
+    pct_m = _dec(str(data.get("PCT_PARTICIPACAO_MANTENEDOR", "")).replace("%", ""))
+    if pct_m is not None and pct_m <= 0:      # aquisição de 100%: não há participação remanescente do mantenedor
+        drop(m, [74, 77, 117])
+    else:
+        move(m, [74, 77, 117], dy=-66)
+    move(m, [11, 103, 111], dy=-77)
+    _set_lines(m[82], ["Após as parcelas iniciais"])
+    _set_lines(m[112], ["A proposta combina recorrência imediata, transição segura e pagamentos estruturados da operação."])
 
 
 # ----------------------------------------------------------------------------
@@ -1649,23 +1759,14 @@ DILIGENCIA_DIAS_FIXO = 180   # prazo da diligência fixo (não depende do CRM)
 
 
 def _divida_declarada(data):
-    """Dívida/contingenciamento informado pelo CRM (0 se nenhum). Campos explícitos (VALOR_ASSUNCAO_DIVIDA, contingenciamento...)
-    mandam; RESERVA_DIVIDAS_VALOR só vale quando nenhum campo explícito veio no payload."""
-    explicit, best = False, Decimal(0)
+    """Maior valor de dívida/contingenciamento/reserva informado pelo CRM (0 se nenhum)."""
+    best = Decimal(0)
     for k, v in data.items():
-        if k == "RESERVA_DIVIDAS_VALOR" or not re.search(r"DIVIDA|CONTING|ASSUN|PASSIVO", k, re.I):
-            continue
-        if re.search(r"ATIVA|PERCENT|PCT|TXT|LBL", k, re.I) or k == "S5_DIVIDA":
+        if not re.search(r"DIVIDA|CONTING|ASSUN|PASSIVO", k, re.I) or re.search(r"ATIVA|PERCENT|PCT|TXT|LBL", k, re.I):
             continue
         val = _dec(v)
-        if val is not None:
-            explicit = True
-            best = max(best, val)
-    if data.get("S5_DIVIDA"):
-        explicit = True
-        best = max(best, _dec(data.get("S5_DIVIDA")) or Decimal(0))
-    if not explicit:
-        best = _dec(data.get("RESERVA_DIVIDAS_VALOR")) or Decimal(0)
+        if val is not None and val > best:
+            best = val
     return best
 
 
@@ -1722,6 +1823,7 @@ def generate(template_path, field_map, data, out_path, photo_path=None, report=N
     add_debt_equation(prs, data, report)
     apply_special_mode(prs, data, report)
     apply_slide8(prs, data, report)
+    apply_sem_imovel_layout(prs, data, report)
     finalize_nowrap_boxes(prs)
     apply_capacity_graphic(prs, data, report)
     add_pills(prs, report)
