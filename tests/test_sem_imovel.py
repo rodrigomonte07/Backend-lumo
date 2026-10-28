@@ -43,3 +43,15 @@ def test_slides_sem_blocos_do_imovel(tmp_path):
 def test_com_imovel_nao_muda(tmp_path):
     t = _texts(_gerar(tmp_path, {**DADOS, "VALOR_PATRIMONIO_IMOBILIARIO": "R$ 500.000,00"}), 4)
     assert "PATRIMÔNIO IMOBILIÁRIO" in t
+
+
+def test_slide4_conta_quando_aquisicao_parcial(tmp_path):
+    d = {**DADOS, "PERCENTUAL_PARTICIPACAO_SOCIETARIA": "70%", "VALOR_OPERACAO_ESCOLAR": "R$ 544.550,76", "VALOR_TOTAL_TRANSACAO": "R$ 544.550,76"}
+    t = _texts(_gerar(tmp_path, d), 4)
+    assert "R$ 777.929,66" in t and "70%" in t and "R$ 544.550,76" in t and "×" in t
+    assert t.count("R$ 544.550,76") == 1          # o mesmo valor não aparece duas vezes
+
+
+def test_slide4_100_por_cento_caixa_unica(tmp_path):
+    t = _texts(_gerar(tmp_path, DADOS), 4)
+    assert t.count("R$ 410.000,00") == 1 and "×" not in t

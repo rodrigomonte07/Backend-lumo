@@ -338,3 +338,4 @@ Ativa quando `TIPO_OPERACAO = "sem_imovel"` (CRM: `transaction_type = operation-
 `TIPO_OPERACAO = "com_imovel"` força o modelo completo.
 - Slide 4: sem o card do patrimônio (Operação escolar = Valor total). Slide 6: só a frente da escola. Slide 7: sem aluguel transitório/bônus e sem entrada do imóvel; totais = pró-labore + parcelas do negócio.
 - Pró-labore não enviado vira R$ 0,00; a linha "30% de participação" some quando `PCT_PARTICIPACAO_MANTENEDOR` é 0%.
+- Slide 4 sem imóvel: aquisição parcial mostra `Operação escolar (100%) × Participação adquirida = Valor total` (100% = valor ÷ percentual); aquisição de 100% mostra uma caixa única com o valor total.

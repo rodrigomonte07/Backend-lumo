@@ -821,15 +821,49 @@ def apply_sem_imovel_layout(prs, data, report):
             if sh is not None and i in m and sh._element.getparent() is not None:
                 sh.left, sh.top = sh.left + Emu(dx * 9525), sh.top + Emu(dy * 9525)
 
-    # ---- slide 4: sem o card do patrimônio; sobram operação escolar = total
+    # ---- slide 4: sem o card do patrimônio
     m = ids(4)
-    drop(m, [2, 3, 23, 24, 32, 33, 34, 35, 45])
-    move(m, [4, 5, 6, 7, 25, 26, 27, 28, 36, 37, 38, 39, 40, 41, 42, 46], dx=-295)
+    esc = _dec(data.get("VALOR_OPERACAO_ESCOLAR"))
+    pct = _pct_dec(data.get("PERCENTUAL_PARTICIPACAO_SOCIETARIA"))
+    total_txt = data.get("VALOR_TOTAL_TRANSACAO") or data.get("VALOR_OPERACAO_ESCOLAR")
     _set_runs(m[30], 0, ["Uma proposta focada na operação escolar", "\nque gera valor para todos."])
-    _set_runs(m[31], 0, ["A proposta considera o valor da ", "participação societária da operação escolar."])
-    _set_lines(m[42], ["Investimento total considerando a operação escolar."])
     _set_runs(m[44], 0, ["A proposta valoriza o ", "potencial de crescimento", " da operação escolar", "",
                          " e cria uma base consistente para ", "\ngeração de valor de longo prazo", " para todos os envolvidos."])
+    razao = str(data.get("RAZAO_SOCIAL_ESCOLA") or data.get("NOME_ESCOLA") or "a escola")
+    if esc and pct and 0 < pct < 100:
+        # operação (100%) x participação adquirida = valor da transação (sem repetir o mesmo número)
+        import copy
+        v100 = _q(esc * 100 / pct)
+        pct_txt = _pct_txt(pct)
+        tree = m[25]._element.getparent()
+        novo_id = max(m) + 1
+        for orig, dx in ((25, -580), (27, -580)):          # ícone da escola também no 1º card (no lugar do ícone do imóvel)
+            clone = copy.deepcopy(m[orig]._element)
+            clone.nvSpPr.cNvPr.set("id", str(novo_id)) if hasattr(clone, "nvSpPr") else None
+            novo_id += 1
+            m[orig]._element.addnext(clone)
+            clone_shape = [x for x in slides[3].shapes if x._element is clone][0]
+            clone_shape.left, clone_shape.top = clone_shape.left + Emu(dx * 9525), clone_shape.top + Emu(2 * 9525)
+        drop(m, [23, 24])
+        _set_lines(m[32], ["OPERAÇÃO ESCOLAR"])
+        _set_lines(m[33], ["Valor da operação escolar (100%)"])
+        _set_lines(m[34], [_money(v100)])
+        _set_runs(m[35], 0, ["Valor atribuído à operação escolar com", "\nbase na análise financeira, diagnóstico e", "\npremissas de recuperação e crescimento."])
+        _set_lines(m[36], ["PARTICIPAÇÃO ADQUIRIDA"])
+        _set_lines(m[37], [f"Participação societária da {razao}"])
+        _set_lines(m[38], [pct_txt])
+        _set_runs(m[39], 0, ["Percentual da operação escolar", "\nadquirido pela Rede Lumo", "\nde Educação."])
+        _set_runs(m[42], 0, ["Valor da participação adquirida", "\nda operação escolar."])   # sem dígitos: a fonte trial marca "5/7/0" neste tamanho
+        _set_lines(m[45], ["×"])
+        _set_runs(m[31], 0, ["A proposta considera o valor da operação escolar e a ", "participação societária adquirida."])
+    else:
+        # aquisição de 100% (ou % desconhecido): uma caixa só, centralizada
+        drop(m, [2, 3, 23, 24, 32, 33, 34, 35, 45, 4, 5, 25, 27, 36, 37, 38, 39, 46])
+        move(m, [6, 7, 26, 28, 40, 41, 42], dx=-568)
+        _set_runs(m[42], 0, ["Aquisição da totalidade da", f"\nparticipação societária da {razao}."])
+        _set_runs(m[31], 0, ["A proposta considera o valor da ", "participação societária da operação escolar."])
+        if total_txt:
+            _set_lines(m[41], [str(total_txt)])
 
     # ---- slide 6: só a frente da escola, centralizada; resumo só com o total
     m = ids(6)
