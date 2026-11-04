@@ -341,5 +341,4 @@ Ativa quando `TIPO_OPERACAO = "sem_imovel"` (CRM: `transaction_type = operation-
 - Slide 4 sem imóvel: aquisição parcial mostra `Operação escolar (100%) × Participação adquirida = Valor total` (100% = valor ÷ percentual); aquisição de 100% mostra uma caixa única com o valor total.
 
 ## Dívida maior que a operação escolar
-Se a assunção de dívida supera o valor da operação escolar, a frente da escola zera (nunca negativa) e o excedente abate a frente do imóvel; o Cash-Out total continua = exposição × %.
-Slides 6 e 7 passam a mostrar só a frente do imóvel; totais do slide 7 = pró-labore + aluguel/bônus + parcelas do imóvel.
+Se a assunção de dívida supera o valor da operação escolar, a dívida inteira abate a frente do imóvel e a escola mantém seu valor (nunca negativo). O Cash-Out total continua = exposição × %.

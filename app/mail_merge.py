@@ -482,13 +482,11 @@ def apply_cash_rule(d, report):
     base_esc = _q(esc - divida)
     base_imo = _q(imo)
     if base_esc < 0:
-        # a dívida assumida é maior que a operação escolar: a frente da escola zera e o excedente abate o imóvel
-        excesso = -base_esc
-        base_esc = Decimal(0)
-        base_imo = max(Decimal(0), _q(imo - excesso))
-        d["_ESCOLA_ZERADA"] = True
-        notes.append(f"Dívida ({_money(divida)}) maior que a operação escolar ({_money(esc)}): escola zerada e excedente "
-                     f"de {_money(excesso)} abatido da frente do imóvel")
+        # a dívida assumida é maior que a operação escolar: ela inteira abate a frente do imóvel e a escola mantém seu valor
+        base_esc = _q(esc)
+        base_imo = max(Decimal(0), _q(imo - divida))
+        notes.append(f"Dívida ({_money(divida)}) maior que a operação escolar ({_money(esc)}): abatida integralmente da "
+                     f"frente do imóvel (base do imóvel {_money(base_imo)})")
     out_esc = _q(base_esc * p_out / 100)
     in_esc = _q(base_esc - out_esc)
     out_imo = _q(base_imo * p_out / 100)
@@ -784,17 +782,6 @@ def _derive_installment_texts(d, report):
             total = pro + (_dec(parcela) or Decimal(0))
             d[f"{etapa}_TOTAL_MENSAL"] = _money(total)
 
-    if d.get("_ESCOLA_ZERADA"):
-        # escola zerada pela dívida: slide 7 sem as linhas do negócio; totais = pró-labore + aluguel/bônus + parcelas do imóvel
-        d["S7_NOTA_LONGO"] = (f"Após a parcela inicial, o saldo do imóvel passa para {_parc(qs_imo, v_sal_imo)}."
-                              if qs_imo and v_sal_imo else "")
-        for etapa, extra in (("CURTO", d.get("CURTO_BONUS_AQUISICAO")), ("MEDIO", d.get("MEDIO_ALUGUEL_TRANSITORIO_MENSAL")),
-                             ("LONGO", d.get("LONGO_PARCELA_ENTRADA_IMOVEL"))):
-            d[f"{etapa}_TOTAL_MENSAL"] = _money((_dec(d.get(f"{etapa}_PROLABORE_MENSAL")) or Decimal(0)) + (_dec(extra) or Decimal(0)))
-        if qe_imo:
-            d["S7_TITULO_TOTAL_LONGO"] = titulo(qe_imo)
-        d["S7_TITULO_TOTAL_MEDIO"] = "Total mensal previsto"
-
 
 def _set_runs(shape, par_idx, texts):
     """Troca o texto run a run (mantém cores/negrito). Texto que começa com '\n' ganha quebra de linha antes. Runs sobrando ficam vazios."""
@@ -817,43 +804,6 @@ def _set_runs(shape, par_idx, texts):
             r._r.addprevious(el)
             t = t[1:]
         r.text = t
-
-
-def apply_escola_zerada_layout(prs, data, report):
-    """Dívida maior que a operação escolar: só a frente do imóvel nos slides 6 e 7 (sem valores negativos/zerados da escola)."""
-    if not data.get("_ESCOLA_ZERADA") or data.get("_SEM_IMOVEL"):
-        return
-    slides = list(prs.slides)
-
-    def ids(n):
-        return {s.shape_id: s for s in slides[n - 1].shapes}
-
-    def drop(m, lst):
-        for i in lst:
-            if i in m:
-                m[i]._element.getparent().remove(m[i]._element)
-
-    def move(m, lst, dx=0, dy=0):
-        for i in lst:
-            if i in m and m[i]._element.getparent() is not None:
-                m[i].left, m[i].top = m[i].left + Emu(dx * 9525), m[i].top + Emu(dy * 9525)
-
-    # slide 6: frente do imóvel centralizada; resumo só com o total
-    m = ids(6)
-    drop(m, [64, 65, 66, 67] + list(range(68, 81)))
-    drop(m, [11, 18, 14, 19, 46, 47, 48, 49, 50, 53])
-    move(m, [45, 51, 52], dx=-560)
-    move(m, [2, 3, 4, 27] + list(range(30, 43)), dx=-380)
-    _set_lines(m[29], ["O valor destinado aos vendedores será pago pela negociação do imóvel,", "conforme estrutura abaixo."])
-
-    # slide 7: sem as linhas do negócio
-    m = ids(7)
-    drop(m, [48, 120, 89, 98, 91, 45, 119, 88, 100])
-    move(m, [51, 118, 90, 99], dy=-57)
-    move(m, [74, 77, 117, 92], dy=-57)
-    move(m, [11, 103, 111], dy=-57)
-    _set_lines(m[112], ["A proposta combina recorrência imediata, transição segura e pagamentos estruturados do imóvel."])
-    report.setdefault("valores_derivados", []).append("Escola zerada pela dívida: slides 6 e 7 só com a frente do imóvel")
 
 
 def apply_sem_imovel_layout(prs, data, report):
@@ -1922,7 +1872,6 @@ def generate(template_path, field_map, data, out_path, photo_path=None, report=N
     apply_special_mode(prs, data, report)
     apply_slide8(prs, data, report)
     apply_sem_imovel_layout(prs, data, report)
-    apply_escola_zerada_layout(prs, data, report)
     finalize_nowrap_boxes(prs)
     apply_capacity_graphic(prs, data, report)
     add_pills(prs, report)

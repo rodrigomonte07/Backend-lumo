@@ -23,12 +23,14 @@ def _texts(prs, n):
     return " | ".join(s.text_frame.text for s in prs.slides[n - 1].shapes if s.has_text_frame)
 
 
-def test_escola_zerada_sem_negativos(tmp_path):
+def test_divida_maior_que_escola_abate_o_imovel(tmp_path):
     out = tmp_path / "o.pptx"
     mm.generate(TEMPLATE, mm.load_json(ROOT / "field_map.json"), dict(DADOS), out)
     prs = Presentation(str(out))
     for n in (5, 6, 7):
         assert "R$ -" not in _texts(prs, n)
     t6 = _texts(prs, 6)
-    assert "473.645,18" in t6 and "NEGOCIAÇÃO DA ESCOLA" not in t6 and "Escola (70%)" not in t6
-    assert "R$ 8.000,00" in _texts(prs, 7)
+    assert "R$ 12.000,00" in t6          # escola: 20.000 x 60%, sem abatimento
+    assert "R$ 461.645,18" in t6         # imóvel: (869.408,64 - 100.000) x 60%
+    assert "R$ 473.645,18" in t6         # total igual ao do CRM
+    assert "NEGOCIAÇÃO DA ESCOLA" in t6
