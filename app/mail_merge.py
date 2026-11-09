@@ -781,6 +781,26 @@ def _derive_installment_texts(d, report):
                 pro = Decimal(0)
             total = pro + (_dec(parcela) or Decimal(0))
             d[f"{etapa}_TOTAL_MENSAL"] = _money(total)
+    else:
+        # com imóvel: o total de cada etapa tem de bater com as linhas visíveis (o CRM às vezes manda outro valor)
+        comp = {
+            "CURTO": ["CURTO_PROLABORE_MENSAL", "CURTO_BONUS_AQUISICAO"],
+            "MEDIO": ["MEDIO_PROLABORE_MENSAL", "MEDIO_ALUGUEL_TRANSITORIO_MENSAL", v_ent_esc],
+            "LONGO": ["LONGO_PROLABORE_MENSAL", v_sal_esc, v_ent_imo],
+        }
+        for etapa, itens in comp.items():
+            if etapa != "CURTO" and not (qe_esc == 1 and qe_imo == 1):
+                continue          # várias parcelas iniciais: mantém o total do CRM
+            vals = [_dec(d.get(i)) if i in d else _dec(i) for i in itens]
+            if any(x is None for x in vals):
+                continue
+            total = sum(vals, Decimal(0))
+            atual = _dec(d.get(f"{etapa}_TOTAL_MENSAL"))
+            if atual is None or abs(atual - total) > Decimal("0.02"):
+                if atual is not None:
+                    miss.append(f"{etapa}_TOTAL_MENSAL do CRM ({_money(atual)}) não bate com as linhas do slide; "
+                                f"usado {_money(total)}")
+                d[f"{etapa}_TOTAL_MENSAL"] = _money(total)
 
 
 def _set_runs(shape, par_idx, texts):
@@ -804,6 +824,73 @@ def _set_runs(shape, par_idx, texts):
             r._r.addprevious(el)
             t = t[1:]
         r.text = t
+
+
+# escolas com adiantamentos pontuais negociados (nome normalizado contém a chave). Também aceita os campos
+# ADIANTAMENTO_1_VALOR/_PRAZO e ADIANTAMENTO_2_VALOR/_PRAZO (+ ADIANTAMENTO_FINALIDADE) enviados no payload.
+ESCOLAS_ADIANTAMENTO = {
+    "anderson alves": {
+        "ADIANTAMENTO_1_VALOR": "R$ 14.000,00", "ADIANTAMENTO_1_PRAZO": "em até 5 dias após a assinatura do contrato",
+        "ADIANTAMENTO_2_VALOR": "R$ 16.000,00", "ADIANTAMENTO_2_PRAZO": "até 10/12",
+        "ADIANTAMENTO_FINALIDADE": "para pagamento do 13º salário, pago pela própria Lumo diretamente aos colaboradores",
+    },
+}
+
+
+def _adiantamentos(data):
+    import unicodedata
+    nome = unicodedata.normalize("NFKD", str(data.get("NOME_ESCOLA", ""))).encode("ascii", "ignore").decode().lower()
+    cfg = {}
+    for chave, c in ESCOLAS_ADIANTAMENTO.items():
+        if chave in nome:
+            cfg = dict(c)
+    for k in list(ESCOLAS_ADIANTAMENTO["anderson alves"]):
+        if str(data.get(k, "")).strip():
+            cfg[k] = str(data[k]).strip()
+    itens = [(cfg.get(f"ADIANTAMENTO_{i}_VALOR"), cfg.get(f"ADIANTAMENTO_{i}_PRAZO")) for i in (1, 2)]
+    itens = [(v, pz) for v, pz in itens if v]
+    return itens, cfg.get("ADIANTAMENTO_FINALIDADE", "")
+
+
+def apply_adiantamentos(prs, data, report):
+    """Slide 7: faixa informativa com os adiantamentos pontuais (ex.: 13º salário) logo abaixo dos totais."""
+    import copy
+    itens, fin = _adiantamentos(data)
+    if not itens:
+        return
+    slide = list(prs.slides)[6]
+    modelo = next((sh for sh in slide.shapes if sh.shape_id == 91), None)
+    if modelo is None:
+        return
+    partes = [f"{v} {pz}".strip() for v, pz in itens]
+    texto = "Adiantamento " + (fin + ": " if fin else ": ") + " + ".join(partes) + "."
+    el = copy.deepcopy(modelo._element)
+    slide.shapes._spTree.append(el)
+    nova = slide.shapes[-1]
+    nova.shape_id  # garante acesso
+    el.nvSpPr.cNvPr.set("id", str(max(sh.shape_id for sh in slide.shapes) + 1))
+    el.nvSpPr.cNvPr.set("name", "Adiantamentos")
+    nova.left, nova.top, nova.width, nova.height = 1490000, 8780000, 9600000, 700000
+    par = nova.text_frame.paragraphs[0]
+    _set_par(par, texto)
+    for extra in nova.text_frame.paragraphs[1:]:
+        extra._p.getparent().remove(extra._p)
+    from pptx.enum.text import MSO_AUTO_SIZE
+    nova.text_frame.auto_size = MSO_AUTO_SIZE.NONE
+    nova.text_frame.word_wrap = True
+    from pptx.util import Pt, Emu
+    nova.text_frame.margin_left = nova.text_frame.margin_right = Emu(180000)
+    for r in par.runs:
+        r.font.size = Pt(13)
+        r.font.bold = False
+    from pptx.dml.color import RGBColor
+    nova.fill.solid()
+    nova.fill.fore_color.rgb = RGBColor(0xFF, 0xE4, 0xD1)
+    nova.line.color.rgb = RGBColor(0xFF, 0x5A, 0x1F)
+    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+    par.alignment = PP_ALIGN.CENTER
+    nova.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    report.setdefault("avisos", []).append("Slide 7: faixa de adiantamentos incluída") if isinstance(report.get("avisos", []), list) else None
 
 
 def apply_sem_imovel_layout(prs, data, report):
@@ -1872,6 +1959,7 @@ def generate(template_path, field_map, data, out_path, photo_path=None, report=N
     apply_special_mode(prs, data, report)
     apply_slide8(prs, data, report)
     apply_sem_imovel_layout(prs, data, report)
+    apply_adiantamentos(prs, data, report)
     finalize_nowrap_boxes(prs)
     apply_capacity_graphic(prs, data, report)
     add_pills(prs, report)

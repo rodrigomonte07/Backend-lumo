@@ -342,3 +342,7 @@ Ativa quando `TIPO_OPERACAO = "sem_imovel"` (CRM: `transaction_type = operation-
 
 ## Dívida maior que a operação escolar
 Se a assunção de dívida supera o valor da operação escolar, a dívida inteira abate a frente do imóvel e a escola mantém seu valor (nunca negativo). O Cash-Out total continua = exposição × %.
+
+## Slide 7: totais e adiantamentos pontuais
+- Com imóvel e entradas de 1 parcela, `CURTO/MEDIO/LONGO_TOTAL_MENSAL` são recalculados a partir das linhas visíveis (pró-labore + aluguel/bônus + parcelas). Se o CRM mandar outro valor (tolerância R$ 0,02), usamos o calculado e registramos em `inconsistencias`.
+- Faixa de adiantamento (ex.: 13º salário) abaixo dos totais: automática para `ANDERSON ALVES` (R$ 14.000,00 em até 5 dias após a assinatura + R$ 16.000,00 até 10/12) ou via campos `ADIANTAMENTO_1_VALOR/_PRAZO`, `ADIANTAMENTO_2_VALOR/_PRAZO`, `ADIANTAMENTO_FINALIDADE`.
