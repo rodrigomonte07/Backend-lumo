@@ -475,7 +475,13 @@ def apply_cash_rule(d, report):
             report.setdefault("inconsistencias", []).append(
                 f"Campos de dívida recebidos mas não usados: {', '.join(sorted(extras))}. Para a assunção de dívida entrar na conta, envie "
                 f"ASSUNCAO_DIVIDA_ATIVA e VALOR_ASSUNCAO_DIVIDA")
-    exposicao = _q(subtotal - divida)
+    # adiantamentos pontuais (ex.: 13º salário) são abatidos do valor do imóvel, não do Cash-Out dos vendedores
+    adiant = Decimal(0)
+    for v_, _pz in _adiantamentos(d)[0]:
+        adiant += _dec(v_) or Decimal(0)
+    if imo <= 0:
+        adiant = Decimal(0)
+    exposicao = _q(subtotal - divida - adiant)
     out_total = _q(exposicao * p_out / 100)
     in_total = _q(exposicao - out_total)
 
@@ -487,6 +493,9 @@ def apply_cash_rule(d, report):
         base_imo = max(Decimal(0), _q(imo - divida))
         notes.append(f"Dívida ({_money(divida)}) maior que a operação escolar ({_money(esc)}): abatida integralmente da "
                      f"frente do imóvel (base do imóvel {_money(base_imo)})")
+    if adiant > 0:
+        base_imo = max(Decimal(0), _q(base_imo - adiant))
+        notes.append(f"Adiantamentos ({_money(adiant)}) abatidos da frente do imóvel (base do imóvel {_money(base_imo)})")
     out_esc = _q(base_esc * p_out / 100)
     in_esc = _q(base_esc - out_esc)
     out_imo = _q(base_imo * p_out / 100)
@@ -540,7 +549,11 @@ def apply_cash_rule(d, report):
     d["ESCOLA_TOTAL_DESTINADO_VENDEDOR"], d["IMOVEL_TOTAL_DESTINADO_VENDEDOR"] = _money(out_esc), _money(out_imo)
     d["ESCOLA_VALOR_CASH_IN"], d["IMOVEL_VALOR_CASH_IN"] = _money(in_esc), _money(in_imo)
     d["S5_DIVIDA_ATIVA"] = "1" if ativa else ""
-    if ativa:
+    d["S5_ADIANTAMENTO"] = _money(adiant) if adiant > 0 else ""
+    if adiant > 0 and not ativa:
+        d["S5_DIVIDA_ATIVA"] = "1"
+        divida = Decimal(0)
+    if ativa or adiant > 0:
         d["S5_SUBTOTAL"], d["S5_DIVIDA"], d["S5_EXPOSICAO"] = _money(subtotal), _money(divida), _money(exposicao)
     d["S5_BASE_PERCENTUAL"] = _money(exposicao)
     notes.append(
@@ -1724,9 +1737,17 @@ def add_debt_equation(prs, data, report):
     if st is not None:
         box._element.remove(st)
 
-    rows = (("Subtotal da transação", data["S5_SUBTOTAL"], "003049", False),
-            ("\u2212 Assunção da dívida", data["S5_DIVIDA"], "003049", False),
-            ("= Exposição financeira", data["S5_EXPOSICAO"], "F14916", True))
+    adiant = data.get("S5_ADIANTAMENTO")
+    rows = [("Subtotal da transação", data["S5_SUBTOTAL"], "003049", False)]
+    if _dec(data.get("S5_DIVIDA")):
+        rows.append(("\u2212 Assunção da dívida", data["S5_DIVIDA"], "003049", False))
+    if adiant:
+        rows.append(("\u2212 Adiantamento (13º salário)", adiant, "003049", False))
+    rows.append(("= Exposição financeira", data["S5_EXPOSICAO"], "F14916", True))
+    extra = 14 * (len(rows) - 3)
+    lh = 27 if len(rows) <= 3 else 22
+    box.top = Emu(int((y - extra) * px)); box.height = Emu(int((h + extra) * px))
+    y -= extra
     pad = 22
     for col, (cx, cw, align) in enumerate(((x + pad, 300, PP_ALIGN.LEFT), (x + w - pad - 240, 240, PP_ALIGN.RIGHT))):
         tb = slide.shapes.add_textbox(Emu(int(cx * px)), Emu(int((y + 16) * px)), Emu(int(cw * px)), Emu(int(92 * px)))
@@ -1738,14 +1759,14 @@ def add_debt_equation(prs, data, report):
         for i, (label, value, color, strong) in enumerate(rows):
             para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
             para.alignment = align
-            para.line_spacing = Pt(27)
+            para.line_spacing = Pt(lh)
             run = para.add_run()
             run.text = label if col == 0 else value
             run.font.size = Pt(15)
             run.font.bold = False
             run.font.name = "Neulis Neue Bold" if (strong or col == 1) else "Neulis Neue Medium"
             run.font.color.rgb = RGBColor.from_string(color)
-    cap = slide.shapes.add_textbox(Emu(int((x + pad) * px)), Emu(int((y + 114) * px)), Emu(int((w - 2 * pad) * px)), Emu(int(22 * px)))
+    cap = slide.shapes.add_textbox(Emu(int((x + pad) * px)), Emu(int((y + 114 + extra) * px)), Emu(int((w - 2 * pad) * px)), Emu(int(22 * px)))
     cap.name = "Conta da exposição financeira (legenda)"
     ctf = cap.text_frame
     ctf.word_wrap = False
