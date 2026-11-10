@@ -138,6 +138,7 @@ async def gerar_proposta(
             "pptx_id": file_id,
             "pptx_url": f"{PUBLIC_BASE_URL}/files/pptx/{file_id}.pptx",
             "registro_id": registro_id,
+            "modo_divida_aplicado": report.get("modo_divida_aplicado", "original"),
             "campos_aplicados": report["applied"],
             "avisos": {
                 "campos_recebidos": sorted(data.keys()),

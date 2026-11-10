@@ -56,3 +56,8 @@ def test_bloqueio_divida_maior_que_subtotal():
 def test_trava_30_pct_gera_aviso():
     _, rep = _run(900000, 600000, 1400000, MODO_DIVIDA="proporcional")
     assert any("mínimo de 30%" in x for x in rep["inconsistencias"])
+
+
+def test_report_traz_modo_aplicado():
+    _, rep = _run(300000, 700000, 400000)
+    assert rep["modo_divida_aplicado"] == "via_cash_in"

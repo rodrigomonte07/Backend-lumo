@@ -570,6 +570,7 @@ def apply_cash_rule(d, report):
                     f"Revisão humana: após abater a dívida, a frente da {nome} ficou em {_money(atual)} "
                     f"({_pct_txt(_q(atual / orig * 100))} do valor original {_money(orig)}), abaixo do mínimo de 30%")
     d["MODO_DIVIDA_APLICADO"] = modo
+    report["modo_divida_aplicado"] = modo
 
     def entrada_crm(front):
         """Entrada que o CRM mandou para a frente: valor informado, ou total destinado - saldo, ou a parcela de entrada."""
