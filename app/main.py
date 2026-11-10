@@ -125,6 +125,8 @@ async def gerar_proposta(
     report = mail_merge.new_report()
     try:
         mail_merge.generate(TEMPLATE_PATH, field_map, data, out_path, str(upload_path) if upload_path else None, report)
+    except ValueError as e:  # regra de negócio (ex.: dívida >= subtotal)
+        raise HTTPException(422, str(e))
     except Exception as e:  # foto corrompida, template inválido etc.
         raise HTTPException(500, f"Falha ao gerar a proposta: {e}")
 

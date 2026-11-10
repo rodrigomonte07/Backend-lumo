@@ -495,26 +495,81 @@ def apply_cash_rule(d, report):
     out_total = _q(exposicao * p_out / 100)
     in_total = _q(exposicao - out_total)
 
+    MIN_FRENTE_PCT = Decimal(30)          # trava: nenhuma frente pode ficar abaixo de 30% do seu valor original
+    ESCOLA_PEQUENA_PCT = Decimal(10)      # escola < 10% do subtotal -> dívida inteira no imóvel
+    modo, modo_via_cash_in = "original", False
+    if ativa:
+        if divida >= subtotal:
+            raise ValueError(f"A assunção de dívida ({_money(divida)}) é maior ou igual ao subtotal da transação "
+                             f"({_money(subtotal)}): a exposição fica zerada ou negativa. Renegocie antes de gerar a proposta.")
+        forcado = re.sub(r"[^a-z_]", "", str(d.get("MODO_DIVIDA") or "").strip().lower().replace(" ", "_"))
+        if forcado and forcado not in ("via_cash_in", "imovel_absorve", "proporcional", "original", "auto"):
+            report.setdefault("inconsistencias", []).append(f"MODO_DIVIDA '{d.get('MODO_DIVIDA')}' inválido — usei o modo automático")
+            forcado = ""
+        viavel_cash_in = divida <= subtotal * p_in / 100
+        if forcado and forcado != "auto":
+            modo = forcado
+        elif divida > esc:       # dívida maior que a operação escolar: regra automática
+            if _regra_pontual(d):
+                modo = "imovel_absorve"
+            elif viavel_cash_in:
+                modo = "via_cash_in"
+            elif esc / subtotal * 100 < ESCOLA_PEQUENA_PCT and divida <= imo:
+                modo = "imovel_absorve"
+            else:
+                modo = "proporcional"
+        if modo == "via_cash_in" and not viavel_cash_in:
+            report.setdefault("inconsistencias", []).append(
+                f"via_cash_in inviável (dívida {_money(divida)} > Cash-In {_money(subtotal * p_in / 100)}) — usei proporcional")
+            modo = "proporcional"
+        if modo == "imovel_absorve" and divida > imo:
+            report.setdefault("inconsistencias", []).append(
+                f"imovel_absorve inviável (dívida {_money(divida)} > imóvel {_money(imo)}) — usei proporcional")
+            modo = "proporcional"
+
     base_esc = _q(esc - divida)
     base_imo = _q(imo)
-    if base_esc < 0 and _regra_pontual(d):
-        # a dívida assumida é maior que a operação escolar: ela inteira abate a frente do imóvel e a escola mantém seu valor
-        base_esc = _q(esc)
-        base_imo = max(Decimal(0), _q(imo - divida))
-        notes.append(f"Dívida ({_money(divida)}) maior que a operação escolar ({_money(esc)}): abatida integralmente da "
-                     f"frente do imóvel (base do imóvel {_money(base_imo)})")
+    if modo == "imovel_absorve":
+        base_esc, base_imo = _q(esc), _q(imo - divida)
+        notes.append(f"Dívida ({_money(divida)}) abatida integralmente da frente do imóvel (base do imóvel {_money(base_imo)}); a escola mantém seu valor")
+    elif modo == "proporcional":
+        r = (subtotal - divida) / subtotal
+        base_esc, base_imo = _q(esc * r), _q(imo * r)
+        notes.append(f"Dívida ({_money(divida)}) dividida proporcionalmente entre escola e imóvel (ambas ficam com {_pct_txt(_q(r * 100))} do valor)")
+    elif modo == "original" and base_esc < 0:
+        pass                                  # regra original (compatível com versões anteriores)
     if adiant > 0:
         base_imo = max(Decimal(0), _q(base_imo - adiant))
         notes.append(f"Adiantamentos ({_money(adiant)}) abatidos da frente do imóvel (base do imóvel {_money(base_imo)})")
-    out_esc = _q(base_esc * p_out / 100)
-    in_esc = _q(base_esc - out_esc)
-    out_imo = _q(base_imo * p_out / 100)
-    in_imo = _q(base_imo - out_imo)
-    if out_esc + out_imo != out_total:   # no máximo centavos de arredondamento: a frente da escola absorve
-        notes.append(f"Cash-Out das frentes ({_money(out_esc + out_imo)}) diferia do total ({_money(out_total)}) em "
-                     f"centavos de arredondamento; ajustado na escola")
+    if modo == "via_cash_in":
+        # Cash-Out sobre o subtotal (vendedores não são afetados); a dívida reduz só o Cash-In, dividida entre as frentes
+        out_total = _q(subtotal * p_out / 100)
+        in_total = _q(exposicao - out_total)
+        out_esc, out_imo = _q(esc * p_out / 100), _q(imo * p_out / 100)
         out_esc = _q(out_total - out_imo)
+        in_esc = _q(esc * (p_in / 100 - divida / subtotal))
+        in_imo = _q(in_total - in_esc)
+        base_esc, base_imo = out_esc + in_esc, out_imo + in_imo
+        notes.append(f"Dívida ({_money(divida)}) abatida só do Cash-In (modo via_cash_in): Cash-Out sobre o subtotal")
+        # o slide 5 mostra os percentuais sobre a exposição: usa os efetivos
+        p_out = _q(out_total / exposicao * 100); p_in = Decimal(100) - p_out
+    else:
+        out_esc = _q(base_esc * p_out / 100)
         in_esc = _q(base_esc - out_esc)
+        out_imo = _q(base_imo * p_out / 100)
+        in_imo = _q(base_imo - out_imo)
+        if out_esc + out_imo != out_total:   # no máximo centavos de arredondamento: a frente da escola absorve
+            notes.append(f"Cash-Out das frentes ({_money(out_esc + out_imo)}) diferia do total ({_money(out_total)}) em "
+                         f"centavos de arredondamento; ajustado na escola")
+            out_esc = _q(out_total - out_imo)
+            in_esc = _q(base_esc - out_esc)
+    if ativa and modo != "original":
+        for nome, orig, atual in (("escola", esc, out_esc + in_esc), ("imóvel", imo, out_imo + in_imo)):
+            if orig > 0 and atual < orig * MIN_FRENTE_PCT / 100:
+                report.setdefault("inconsistencias", []).append(
+                    f"Revisão humana: após abater a dívida, a frente da {nome} ficou em {_money(atual)} "
+                    f"({_pct_txt(_q(atual / orig * 100))} do valor original {_money(orig)}), abaixo do mínimo de 30%")
+    d["MODO_DIVIDA_APLICADO"] = modo
 
     def entrada_crm(front):
         """Entrada que o CRM mandou para a frente: valor informado, ou total destinado - saldo, ou a parcela de entrada."""

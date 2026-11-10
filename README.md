@@ -348,3 +348,11 @@ Se a assunção de dívida supera o valor da operação escolar, a dívida intei
 - As regras pontuais (dívida > escola abate o imóvel; recálculo dos totais do slide 7) só valem para `ANDERSON ALVES` ou com `REGRA_PONTUAL_ATIVA=1`. Outras escolas seguem a regra original.
 - Os adiantamentos abatem o valor do imóvel (não o Cash-Out da escola); a conta do slide 5 ganha a linha "Adiantamento".
 - Faixa de adiantamento (ex.: 13º salário) abaixo dos totais: automática para `ANDERSON ALVES` (R$ 14.000,00 em até 5 dias após a assinatura + R$ 16.000,00 até 10/12) ou via campos `ADIANTAMENTO_1_VALOR/_PRAZO`, `ADIANTAMENTO_2_VALOR/_PRAZO`, `ADIANTAMENTO_FINALIDADE`.
+
+## Dívida maior que a operação escolar (`MODO_DIVIDA`)
+Total dos vendedores = (escola + imóvel − dívida) × % (exceto via_cash_in). Só muda em qual frente a dívida é descontada.
+- Dívida ≤ escola: regra original (escola absorve).
+- Dívida > escola, automático: **via_cash_in** (Cash-Out sobre o subtotal; a dívida reduz só o Cash-In; precisa dívida ≤ Cash-In) → senão **imovel_absorve** (escola < 10% do subtotal e dívida ≤ imóvel) → senão **proporcional**.
+- Manual (campo `MODO_DIVIDA` = `via_cash_in` | `imovel_absorve` | `proporcional`) vale sempre. Anderson Alves (regra pontual) usa `imovel_absorve`.
+- Dívida ≥ subtotal: HTTP 422, proposta não é gerada. Frente abaixo de 30% do valor original: aviso em `inconsistencias` (revisão humana).
+- `MODO_DIVIDA_APLICADO` indica o modo usado.
