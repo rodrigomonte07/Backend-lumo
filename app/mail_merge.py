@@ -413,6 +413,16 @@ def _split_parcelas(total, n):
     return p, _q(total - p * (n - 1))
 
 
+# regras pontuais por escola (nome normalizado contém a chave) ou por flag no payload
+ESCOLAS_REGRA_PONTUAL = {"anderson alves"}
+
+
+def _regra_pontual(d):
+    import unicodedata
+    nome = unicodedata.normalize("NFKD", str(d.get("NOME_ESCOLA", ""))).encode("ascii", "ignore").decode().lower()
+    return any(k in nome for k in ESCOLAS_REGRA_PONTUAL) or _truthy(d.get("REGRA_PONTUAL_ATIVA"))
+
+
 def apply_cash_rule(d, report):
     """
     Regra única de Cash-Out / Cash-In (mesma conta do CRM e do contrato SPA).
@@ -487,7 +497,7 @@ def apply_cash_rule(d, report):
 
     base_esc = _q(esc - divida)
     base_imo = _q(imo)
-    if base_esc < 0:
+    if base_esc < 0 and _regra_pontual(d):
         # a dívida assumida é maior que a operação escolar: ela inteira abate a frente do imóvel e a escola mantém seu valor
         base_esc = _q(esc)
         base_imo = max(Decimal(0), _q(imo - divida))
@@ -802,6 +812,8 @@ def _derive_installment_texts(d, report):
             "LONGO": ["LONGO_PROLABORE_MENSAL", v_sal_esc, v_ent_imo],
         }
         for etapa, itens in comp.items():
+            if not _regra_pontual(d):
+                break
             if etapa != "CURTO" and not (qe_esc == 1 and qe_imo == 1):
                 continue          # várias parcelas iniciais: mantém o total do CRM
             vals = [_dec(d.get(i)) if i in d else _dec(i) for i in itens]

@@ -7,7 +7,7 @@ from app import mail_merge as mm
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "modelo_rede_lumo (1).pptx"
 DADOS = {
-    "NOME_ESCOLA": "COLEGIO TESTE DIVIDA", "PERCENTUAL_PARTICIPACAO_SOCIETARIA": "70%",
+    "NOME_ESCOLA": "COLEGIO TESTE DIVIDA", "REGRA_PONTUAL_ATIVA": "1", "PERCENTUAL_PARTICIPACAO_SOCIETARIA": "70%",
     "VALOR_OPERACAO_ESCOLAR": "R$ 20.000,00", "VALOR_PATRIMONIO_IMOBILIARIO": "R$ 869.408,64",
     "VALOR_TOTAL_TRANSACAO": "R$ 889.408,64", "PERCENTUAL_CASH_OUT": "60%", "PERCENTUAL_CASH_IN": "40%",
     "ASSUNCAO_DIVIDA_ATIVA": "sim", "VALOR_ASSUNCAO_DIVIDA": "R$ 100.000,00",
@@ -34,3 +34,14 @@ def test_divida_maior_que_escola_abate_o_imovel(tmp_path):
     assert "R$ 461.645,18" in t6         # imóvel: (869.408,64 - 100.000) x 60%
     assert "R$ 473.645,18" in t6         # total igual ao do CRM
     assert "NEGOCIAÇÃO DA ESCOLA" in t6
+
+
+def test_regra_da_divida_so_para_escola_com_regra_pontual(tmp_path):
+    """Outras escolas seguem a regra original (dívida abate só a escola): o imóvel não é tocado."""
+    dados = dict(DADOS)
+    dados.pop("REGRA_PONTUAL_ATIVA")
+    out = tmp_path / "o.pptx"
+    mm.generate(TEMPLATE, mm.load_json(ROOT / "field_map.json"), dados, out)
+    rep = mm.new_report()
+    mm.generate(TEMPLATE, mm.load_json(ROOT / "field_map.json"), dados, out, report=rep)
+    assert not any("abatida integralmente" in n for n in rep.get("valores_derivados", []))
